@@ -4,6 +4,7 @@ const accountTypeByPayload: Record<string, AccountType> = {
   worker: "worker",
   trader: "worker",
   job_seeker: "worker",
+  career_seeker: "worker",
   employer: "employer",
   customer: "employer",
 };
@@ -19,7 +20,12 @@ export function parseAccountType(input: string | undefined): AccountType | null 
     return accountTypeByPayload[normalized];
   }
 
-  if (normalized === "1" || normalized.includes("worker") || normalized.includes("trader")) {
+  if (
+    normalized === "1" ||
+    normalized.includes("worker") ||
+    normalized.includes("trader") ||
+    normalized.includes("career")
+  ) {
     return "worker";
   }
 

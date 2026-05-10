@@ -20,8 +20,12 @@ Incoming WhatsApp users are identified by Twilio's `WaId` when available, with t
 
 ## Onboarding Flow
 
-New users first choose an account type from a Twilio list picker. After the role is saved, Zaa sends a separate start-onboarding button. When the user taps it, the backend starts a Twilio Studio Flow for structured profile collection. The Studio Flow should collect identity, address, and transaction PIN details, then submit the final payload to the API. BVN must be passed to Squad during virtual account creation and must not be stored in the database.
+New users first choose an account type from a Twilio list picker. In the sandbox, Zaa falls back to conversational onboarding so the MVP works without WhatsApp Flow approval. In production, the same data shape can be collected through a `twilio/flows` content template. Onboarding collects identity, address, and transaction PIN details. BVN is passed to Squad during virtual account creation and must not be stored in the database or message metadata.
+
+## Virtual Accounts
+
+At onboarding completion, the API hashes the transaction PIN, calls Squad's virtual account API with the transient BVN, then stores only the returned virtual account metadata. The BVN and raw PIN are removed from persisted onboarding data.
 
 ## Data Layer
 
-The backend uses Postgres with Drizzle ORM. In development and production, the API reads `DATABASE_URL` from the root `.env` file. The initial schema tracks users, WhatsApp contacts, messages, worker profiles, and opportunities.
+The backend uses Postgres with Drizzle ORM. In development and production, the API reads `DATABASE_URL` from the root `.env` file. The schema tracks users, WhatsApp contacts, messages, worker profiles, virtual accounts, transaction PIN hashes, and opportunities.

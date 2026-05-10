@@ -42,7 +42,19 @@ export const users = pgTable("users", {
   onboardingStage: onboardingStage("onboarding_stage")
     .default("account_type_pending")
     .notNull(),
+  onboardingData: jsonb("onboarding_data").$type<Record<string, unknown>>().default({}).notNull(),
   preferredLanguage: text("preferred_language").default("en").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const userSecurity = pgTable("user_security", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" })
+    .unique(),
+  transactionPinHash: text("transaction_pin_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -60,6 +72,25 @@ export const whatsappContacts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("whatsapp_contacts_user_id_idx").on(table.userId)],
+);
+
+export const virtualAccounts = pgTable(
+  "virtual_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").default("squad").notNull(),
+    customerIdentifier: text("customer_identifier").notNull().unique(),
+    virtualAccountNumber: text("virtual_account_number").notNull().unique(),
+    bankCode: text("bank_code"),
+    beneficiaryAccount: text("beneficiary_account"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("virtual_accounts_user_id_idx").on(table.userId)],
 );
 
 export const workerProfiles = pgTable("worker_profiles", {

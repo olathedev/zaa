@@ -9,6 +9,8 @@ export type TwilioWhatsAppWebhookPayload = {
   ButtonPayload?: string;
   ListId?: string;
   ListTitle?: string;
+  FlowData?: string;
+  InteractiveData?: string;
   ProfileName?: string;
   WaId?: string;
   NumMedia?: string;
@@ -25,6 +27,8 @@ export type NormalizedWhatsAppMessage = {
   buttonPayload?: string;
   listId?: string;
   listTitle?: string;
+  flowData?: string;
+  interactiveData?: string;
   profileName?: string;
   whatsappId?: string;
   mediaCount: number;

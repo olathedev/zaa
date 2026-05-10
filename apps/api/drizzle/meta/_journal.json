@@ -15,6 +15,20 @@
       "when": 1778338600175,
       "tag": "0001_tearful_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778413393591,
+      "tag": "0002_special_junta",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778414765056,
+      "tag": "0003_outstanding_frightful_four",
+      "breakpoints": true
     }
   ]
 }

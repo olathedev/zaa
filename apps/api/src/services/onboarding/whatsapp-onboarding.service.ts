@@ -1,15 +1,32 @@
 import { eq, or } from "drizzle-orm";
 
+import { env } from "../../config/env.js";
 import { getDb } from "../../db/client.js";
-import { messages, users, whatsappContacts } from "../../db/schema.js";
+import {
+  messages,
+  userSecurity,
+  users,
+  virtualAccounts,
+  whatsappContacts,
+} from "../../db/schema.js";
+import { hashTransactionPin } from "../security/pin.service.js";
+import { createSquadVirtualAccount } from "../squad/squad-virtual-account.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import {
   sendOnboardingAccountTypePrompt,
   sendOnboardingStartPrompt,
   sendWhatsAppMessage,
-  startOnboardingFlow,
 } from "../whatsapp/twilio-whatsapp.service.js";
 import { parseAccountType } from "./account-type.js";
+import {
+  getInitialOnboardingData,
+  getNextStep,
+  getPromptForStep,
+  isValidStepAnswer,
+  normalizeData,
+  recordStepAnswer,
+  type ConversationalOnboardingStep,
+} from "./conversational-onboarding.js";
 
 type UserWithContact = {
   user: typeof users.$inferSelect;
@@ -113,7 +130,7 @@ async function saveInboundMessage(params: {
       whatsappMessageId: params.message.messageId,
       direction: "inbound",
       body: params.message.body,
-      metadata: params.message.raw,
+      metadata: removeSensitiveWebhookFields(params.message.raw),
     })
     .onConflictDoNothing();
 }
@@ -141,62 +158,322 @@ async function handleAccountTypeStep(
     .set({
       accountType,
       onboardingStage: "profile_pending",
+      onboardingData: getInitialOnboardingData(),
       updatedAt: new Date(),
     })
     .where(eq(users.id, userWithContact.user.id));
 
   await sendOnboardingStartPrompt(message.from);
+  await sendWhatsAppMessage({
+    to: message.from,
+    body: getPromptForStep("first_name"),
+  });
 }
 
 async function handleProfilePendingStep(
   userWithContact: UserWithContact,
   message: NormalizedWhatsAppMessage,
 ) {
-  if (!isStartOnboardingIntent(message)) {
-    await sendOnboardingStartPrompt(message.from);
-    return;
-  }
-
-  if (!isSupportedAccountType(userWithContact.user.accountType)) {
-    await sendOnboardingAccountTypePrompt(message.from);
-    return;
-  }
-
-  await startOnboardingFlow({
-    to: message.from,
-    userId: userWithContact.user.id,
-    accountType: userWithContact.user.accountType,
+  console.log("Received profile-pending WhatsApp message", {
+    from: message.from,
+    hasFlowData: Boolean(message.flowData ?? message.interactiveData),
   });
+
+  if (!message.flowData && !message.interactiveData) {
+    await handleConversationalOnboardingStep(userWithContact, message);
+  }
 }
 
-function isSupportedAccountType(
-  value: string | null,
-): value is "worker" | "employer" {
-  return value === "worker" || value === "employer";
-}
+async function handleConversationalOnboardingStep(
+  userWithContact: UserWithContact,
+  message: NormalizedWhatsAppMessage,
+) {
+  const db = getDb();
+  const onboardingData = normalizeData(userWithContact.user.onboardingData);
+  const currentStep = onboardingData.currentStep as ConversationalOnboardingStep;
+  const validationError = isValidStepAnswer({
+    data: onboardingData,
+    step: currentStep,
+    answer: message.body,
+  });
 
-function isStartOnboardingIntent(message: NormalizedWhatsAppMessage) {
-  const value =
-    message.buttonPayload ??
-    message.buttonText ??
-    message.listId ??
-    message.listTitle ??
-    message.body;
-
-  if (!value) {
-    return false;
+  if (validationError) {
+    await sendWhatsAppMessage({
+      to: message.from,
+      body: validationError,
+    });
+    return;
   }
 
-  const normalized = value.trim().toLowerCase();
+  const updatedData = recordStepAnswer({
+    data: onboardingData,
+    step: currentStep,
+    answer: message.body,
+  });
+  const nextStep = getNextStep(currentStep);
 
-  return (
-    normalized === "start_onboarding" ||
-    normalized === "complete_onboarding" ||
-    normalized === "complete onboarding" ||
-    normalized === "start"
-  );
+  if (!nextStep) {
+    const completionResult = await completeOnboarding({
+      userWithContact,
+      onboardingData: updatedData,
+      from: message.from,
+    });
+
+    await db
+      .update(users)
+      .set({
+        onboardingStage: completionResult.completed ? "completed" : "profile_pending",
+        onboardingData: completionResult.completed
+          ? stripTransientOnboardingData(updatedData)
+          : {
+              ...updatedData,
+              currentStep: completionResult.retryStep,
+            },
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userWithContact.user.id));
+
+    await sendWhatsAppMessage({
+      to: message.from,
+      body: completionResult.message,
+    });
+    return;
+  }
+
+  updatedData.currentStep = nextStep;
+
+  await db
+    .update(users)
+    .set({
+      onboardingData: updatedData,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userWithContact.user.id));
+
+  await sendWhatsAppMessage({
+    to: message.from,
+    body: getPromptForStep(nextStep),
+  });
 }
 
 function stripWhatsAppPrefix(value: string) {
   return value.replace("whatsapp:", "");
+}
+
+function removeSensitiveWebhookFields(raw: Record<string, unknown>) {
+  const { FlowData: _flowData, InteractiveData: _interactiveData, ...safeRaw } = raw;
+
+  return safeRaw;
+}
+
+async function completeOnboarding(params: {
+  userWithContact: UserWithContact;
+  onboardingData: ReturnType<typeof normalizeData>;
+  from: string;
+}) {
+  const db = getDb();
+  const profile = params.onboardingData.profile;
+  const address = params.onboardingData.address;
+  const security = params.onboardingData.security;
+  const transient = params.onboardingData.transient;
+  const validationError = getCompletionValidationError(params.onboardingData);
+
+  if (validationError) {
+    return {
+      completed: false,
+      message: validationError,
+    };
+  }
+
+  const firstName = requireValue(profile.firstName, "first name");
+  const lastName = requireValue(profile.lastName, "last name");
+  const dob = requireValue(profile.dob, "date of birth");
+  const gender = requireValue(profile.gender, "gender");
+  const bvn = requireValue(transient.bvn, "BVN");
+  const street = requireValue(address.street, "street");
+  const city = requireValue(address.city, "city");
+  const state = requireValue(address.state, "state");
+  const pin = requireValue(security.pin, "transaction PIN");
+  const pinHash = await hashTransactionPin(pin);
+  let squadAccount: Awaited<ReturnType<typeof createSquadVirtualAccount>>;
+
+  try {
+    squadAccount = await createSquadVirtualAccount({
+      customerIdentifier: createCustomerIdentifier(params.userWithContact.user.id),
+      firstName,
+      lastName,
+      middleName: profile.middleName ?? "N/A",
+      mobileNumber: toLocalNigerianMobileNumber(params.from),
+      dob: toSquadDateOfBirth(dob),
+      email: profile.email ?? createFallbackEmail(params.userWithContact.user.id),
+      bvn,
+      gender: toSquadGender(gender),
+      address: [street, city, state].join(", "),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const retryStep = getRetryStepForSquadError(message);
+
+    return {
+      completed: false,
+      retryStep,
+      message:
+        "I couldn't finish creating your virtual account yet.\n\n" +
+        getRetryMessageForStep(retryStep),
+    };
+  }
+  const customerIdentifier = requireValue(
+    squadAccount.customer_identifier,
+    "Squad customer identifier",
+  );
+  const virtualAccountNumber = requireValue(
+    squadAccount.virtual_account_number,
+    "Squad virtual account number",
+  );
+
+  await db
+    .insert(userSecurity)
+    .values({
+      userId: params.userWithContact.user.id,
+      transactionPinHash: pinHash,
+    })
+    .onConflictDoUpdate({
+      target: userSecurity.userId,
+      set: {
+        transactionPinHash: pinHash,
+        updatedAt: new Date(),
+      },
+    });
+
+  await db
+    .insert(virtualAccounts)
+    .values({
+      userId: params.userWithContact.user.id,
+      provider: "squad",
+      customerIdentifier,
+      virtualAccountNumber,
+      bankCode: squadAccount.bank_code,
+      beneficiaryAccount: squadAccount.beneficiary_account ?? undefined,
+      metadata: {
+        firstName: squadAccount.first_name,
+        lastName: squadAccount.last_name,
+        createdAt: squadAccount.created_at,
+        updatedAt: squadAccount.updated_at,
+      },
+    })
+    .onConflictDoUpdate({
+      target: virtualAccounts.customerIdentifier,
+      set: {
+        virtualAccountNumber,
+        bankCode: squadAccount.bank_code,
+        beneficiaryAccount: squadAccount.beneficiary_account ?? undefined,
+        metadata: {
+          firstName: squadAccount.first_name,
+          lastName: squadAccount.last_name,
+          createdAt: squadAccount.created_at,
+          updatedAt: squadAccount.updated_at,
+        },
+        updatedAt: new Date(),
+      },
+    });
+
+  return {
+    completed: true,
+    retryStep: undefined,
+    message:
+      "Your Zaa account is ready.\n\n" +
+      `Virtual account: ${virtualAccountNumber}\n` +
+      `Bank code: ${squadAccount.bank_code ?? "pending"}\n\n` +
+      "You can now use Zaa to track opportunities and receive payments.",
+  };
+}
+
+function stripTransientOnboardingData(
+  data: ReturnType<typeof normalizeData>,
+): Record<string, unknown> {
+  const { transient: _transient, security: _security, ...safeData } = data;
+
+  return safeData;
+}
+
+function getCompletionValidationError(data: ReturnType<typeof normalizeData>) {
+  const requiredFields = [
+    data.profile.firstName,
+    data.profile.lastName,
+    data.profile.dob,
+    data.profile.gender,
+    data.transient.bvn,
+    data.address.street,
+    data.address.city,
+    data.address.state,
+    data.security.pin,
+  ];
+
+  if (requiredFields.some((value) => !value)) {
+    return "Some onboarding details are missing. Please reply START to restart onboarding.";
+  }
+
+  return null;
+}
+
+function requireValue(value: string | undefined, label: string) {
+  if (!value) {
+    throw new Error(`Missing ${label}`);
+  }
+
+  return value;
+}
+
+function createCustomerIdentifier(userId: string) {
+  return `ZAA${userId.replaceAll("-", "").slice(0, 24)}`;
+}
+
+function toLocalNigerianMobileNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("234")) {
+    return `0${digits.slice(3)}`;
+  }
+
+  return digits;
+}
+
+function toSquadDateOfBirth(value: string) {
+  const [day, month, year] = value.split("-");
+
+  if (!day || !month || !year) {
+    return value;
+  }
+
+  return `${month}/${day}/${year}`;
+}
+
+function toSquadGender(value: string) {
+  return value.trim().toLowerCase().startsWith("f") ? "2" : "1";
+}
+
+function createFallbackEmail(userId: string) {
+  return env.onboarding.defaultEmail ?? `user-${userId.replaceAll("-", "")}@example.com`;
+}
+
+function getRetryStepForSquadError(message: string): ConversationalOnboardingStep {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("email")) {
+    return "email";
+  }
+
+  if (normalized.includes("bvn")) {
+    return "bvn";
+  }
+
+  return "bvn";
+}
+
+function getRetryMessageForStep(step: ConversationalOnboardingStep) {
+  if (step === "email") {
+    return "Please reply with a valid email address so I can try again.";
+  }
+
+  return "Please check your BVN and reply with the correct 11-digit BVN so I can try again.";
 }

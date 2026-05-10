@@ -48,7 +48,18 @@ export const env = {
     onboardingAccountTypeListPickerContentSid:
       process.env.TWILIO_ONBOARDING_ACCOUNT_TYPE_LIST_PICKER_CONTENT_SID ??
       process.env.TWILIO_ONBOARDING_ACCOUNT_TYPE_CONTENT_SID,
+    useOnboardingFlowTemplate: readBoolean(
+      process.env.TWILIO_ONBOARDING_USE_FLOW_TEMPLATE,
+      false,
+    ),
     onboardingStartContentSid: process.env.TWILIO_ONBOARDING_START_CONTENT_SID,
-    onboardingFlowSid: process.env.TWILIO_ONBOARDING_FLOW_SID,
+  },
+  squad: {
+    baseUrl: process.env.SQUAD_BASE_URL ?? "https://sandbox-api-d.squadco.com",
+    secretKey: process.env.SQUAD_SECRET_KEY,
+    beneficiaryAccount: process.env.SQUAD_BENEFICIARY_ACCOUNT,
+  },
+  onboarding: {
+    defaultEmail: process.env.DEFAULT_ONBOARDING_EMAIL,
   },
 };
