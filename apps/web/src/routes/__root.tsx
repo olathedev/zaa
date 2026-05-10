@@ -15,10 +15,27 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'Zaa ai',
+      },
+      {
+        name: 'description',
+        content: 'Zaa ai connects workers, traders, artisans, and job seekers to opportunities and financial services through conversational AI.',
       },
     ],
     links: [
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.googleapis.com',
+      },
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap',
+      },
       {
         rel: 'stylesheet',
         href: appCss,

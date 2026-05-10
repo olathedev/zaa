@@ -1,5 +1,8 @@
-
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
 
 * {
   box-sizing: border-box;
@@ -11,7 +14,18 @@ body,
   min-height: 100%;
 }
 
-body {
-  margin: 0;
+html {
+  scroll-behavior: smooth;
 }
 
+body {
+  background: #f8fbff;
+  font-family: var(--font-sans);
+  margin: 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+}
