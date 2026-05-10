@@ -13,6 +13,12 @@ type SendWhatsAppContentMessageParams = {
   contentVariables?: Record<string, string>;
 };
 
+type StartOnboardingFlowParams = {
+  to: string;
+  userId: string;
+  accountType: "worker" | "employer";
+};
+
 let client: ReturnType<typeof twilio> | undefined;
 
 function getTwilioClient() {
@@ -55,10 +61,10 @@ export async function sendWhatsAppContentMessage(
 }
 
 export async function sendOnboardingAccountTypePrompt(to: string) {
-  if (env.twilio.onboardingAccountTypeContentSid) {
+  if (env.twilio.onboardingAccountTypeListPickerContentSid) {
     await sendWhatsAppContentMessage({
       to,
-      contentSid: env.twilio.onboardingAccountTypeContentSid,
+      contentSid: env.twilio.onboardingAccountTypeListPickerContentSid,
     });
     return;
   }
@@ -72,4 +78,38 @@ export async function sendOnboardingAccountTypePrompt(to: string) {
       "1. Worker / Trader\n" +
       "2. Employer",
   });
+}
+
+export async function sendOnboardingStartPrompt(to: string) {
+  if (env.twilio.onboardingStartContentSid) {
+    await sendWhatsAppContentMessage({
+      to,
+      contentSid: env.twilio.onboardingStartContentSid,
+    });
+    return;
+  }
+
+  await sendWhatsAppMessage({
+    to,
+    body:
+      "Please click the button below to complete your onboarding and set up your Zaa account.\n\n" +
+      "If you do not see a button, reply START.",
+  });
+}
+
+export async function startOnboardingFlow(params: StartOnboardingFlowParams) {
+  if (!env.twilio.onboardingFlowSid) {
+    throw new Error("Twilio onboarding Flow SID is not configured");
+  }
+
+  return getTwilioClient()
+    .studio.v2.flows(env.twilio.onboardingFlowSid)
+    .executions.create({
+      to: params.to,
+      from: getWhatsAppFrom(),
+      parameters: {
+        user_id: params.userId,
+        account_type: params.accountType,
+      },
+    });
 }

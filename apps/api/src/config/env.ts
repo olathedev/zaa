@@ -45,7 +45,10 @@ export const env = {
     authToken: process.env.TWILIO_AUTH_TOKEN,
     whatsappFrom: process.env.TWILIO_WHATSAPP_FROM,
     validateWebhooks: readBoolean(process.env.TWILIO_VALIDATE_WEBHOOKS, false),
-    onboardingAccountTypeContentSid:
+    onboardingAccountTypeListPickerContentSid:
+      process.env.TWILIO_ONBOARDING_ACCOUNT_TYPE_LIST_PICKER_CONTENT_SID ??
       process.env.TWILIO_ONBOARDING_ACCOUNT_TYPE_CONTENT_SID,
+    onboardingStartContentSid: process.env.TWILIO_ONBOARDING_START_CONTENT_SID,
+    onboardingFlowSid: process.env.TWILIO_ONBOARDING_FLOW_SID,
   },
 };

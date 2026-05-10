@@ -5,7 +5,9 @@ import { messages, users, whatsappContacts } from "../../db/schema.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import {
   sendOnboardingAccountTypePrompt,
+  sendOnboardingStartPrompt,
   sendWhatsAppMessage,
+  startOnboardingFlow,
 } from "../whatsapp/twilio-whatsapp.service.js";
 import { parseAccountType } from "./account-type.js";
 
@@ -30,6 +32,11 @@ export async function handleIncomingWhatsAppMessage(
     userWithContact.user.onboardingStage === "account_type_pending"
   ) {
     await handleAccountTypeStep(userWithContact, message);
+    return;
+  }
+
+  if (userWithContact.user.onboardingStage === "profile_pending") {
+    await handleProfilePendingStep(userWithContact, message);
     return;
   }
 
@@ -116,7 +123,13 @@ async function handleAccountTypeStep(
   message: NormalizedWhatsAppMessage,
 ) {
   const db = getDb();
-  const accountType = parseAccountType(message.buttonPayload ?? message.buttonText ?? message.body);
+  const accountType = parseAccountType(
+    message.listId ??
+      message.listTitle ??
+      message.buttonPayload ??
+      message.buttonText ??
+      message.body,
+  );
 
   if (!accountType) {
     await sendOnboardingAccountTypePrompt(message.from);
@@ -132,18 +145,56 @@ async function handleAccountTypeStep(
     })
     .where(eq(users.id, userWithContact.user.id));
 
-  await sendWhatsAppMessage({
+  await sendOnboardingStartPrompt(message.from);
+}
+
+async function handleProfilePendingStep(
+  userWithContact: UserWithContact,
+  message: NormalizedWhatsAppMessage,
+) {
+  if (!isStartOnboardingIntent(message)) {
+    await sendOnboardingStartPrompt(message.from);
+    return;
+  }
+
+  if (!isSupportedAccountType(userWithContact.user.accountType)) {
+    await sendOnboardingAccountTypePrompt(message.from);
+    return;
+  }
+
+  await startOnboardingFlow({
     to: message.from,
-    body: getAccountTypeConfirmation(accountType),
+    userId: userWithContact.user.id,
+    accountType: userWithContact.user.accountType,
   });
 }
 
-function getAccountTypeConfirmation(accountType: "worker" | "employer") {
-  if (accountType === "worker") {
-    return "Great. I will help you build your work profile and find income opportunities. What work do you currently do, or what work are you looking for?";
+function isSupportedAccountType(
+  value: string | null,
+): value is "worker" | "employer" {
+  return value === "worker" || value === "employer";
+}
+
+function isStartOnboardingIntent(message: NormalizedWhatsAppMessage) {
+  const value =
+    message.buttonPayload ??
+    message.buttonText ??
+    message.listId ??
+    message.listTitle ??
+    message.body;
+
+  if (!value) {
+    return false;
   }
 
-  return "Great. I will help you find capable hands. What service or role do you need help with?";
+  const normalized = value.trim().toLowerCase();
+
+  return (
+    normalized === "start_onboarding" ||
+    normalized === "complete_onboarding" ||
+    normalized === "complete onboarding" ||
+    normalized === "start"
+  );
 }
 
 function stripWhatsAppPrefix(value: string) {

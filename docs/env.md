@@ -17,5 +17,7 @@ cp .env.example .env
 - `TWILIO_AUTH_TOKEN`: Twilio auth token, used for sending messages and optional webhook validation.
 - `TWILIO_WHATSAPP_FROM`: Twilio WhatsApp sender, for example `whatsapp:+14155238886` in the sandbox.
 - `TWILIO_VALIDATE_WEBHOOKS`: set to `true` when the API has a stable public URL and should validate Twilio webhook signatures.
-- `TWILIO_ONBOARDING_ACCOUNT_TYPE_CONTENT_SID`: optional Twilio Content SID for the onboarding quick-reply prompt.
+- `TWILIO_ONBOARDING_ACCOUNT_TYPE_LIST_PICKER_CONTENT_SID`: optional Twilio Content SID for the onboarding account type list picker.
+- `TWILIO_ONBOARDING_START_CONTENT_SID`: optional Twilio Content SID for the button prompt that starts full onboarding.
+- `TWILIO_ONBOARDING_FLOW_SID`: Twilio Studio Flow SID used to collect profile, address, and PIN details.
 - `OPENAI_API_KEY`: API key for the LLM provider.

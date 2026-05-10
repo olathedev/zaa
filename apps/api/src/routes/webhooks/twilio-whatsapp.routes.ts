@@ -18,6 +18,8 @@ const twilioWebhookSchema = z
     Body: z.string().optional(),
     ButtonText: z.string().optional(),
     ButtonPayload: z.string().optional(),
+    ListId: z.string().optional(),
+    ListTitle: z.string().optional(),
     ProfileName: z.string().optional(),
     WaId: z.string().optional(),
     NumMedia: z.string().optional(),

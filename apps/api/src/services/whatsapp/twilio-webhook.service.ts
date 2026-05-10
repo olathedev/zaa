@@ -46,6 +46,8 @@ export function normalizeTwilioWhatsAppMessage(
     body: payload.Body ?? "",
     buttonText: payload.ButtonText,
     buttonPayload: payload.ButtonPayload,
+    listId: payload.ListId,
+    listTitle: payload.ListTitle,
     profileName: payload.ProfileName,
     whatsappId: payload.WaId,
     mediaCount: Number(payload.NumMedia ?? 0),
