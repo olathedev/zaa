@@ -79,8 +79,8 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
 
   return (
     <section ref={sectionRef} className="bg-white">
-      <div className="mx-auto max-w-7xl px-5 pb-20 pt-12 sm:px-8 lg:pb-28 lg:pt-18">
-        <div className="grid gap-10 lg:grid-cols-[0.95fr_0.72fr] lg:items-end lg:gap-16">
+      <div className="mx-auto max-w-7xl px-5 pb-14 pt-10 sm:px-8 sm:pb-20 lg:pb-28 lg:pt-18">
+        <div className="grid gap-8 lg:grid-cols-[0.95fr_0.72fr] lg:items-end lg:gap-16">
           <div>
             <p
               data-hero-intro
@@ -91,7 +91,7 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
 
             <h1
               data-hero-intro
-              className="max-w-4xl text-3xl font-semibold leading-[1.08] tracking-[-0.01em] text-[#07111f] sm:text-4xl lg:text-[3.1rem]"
+              className="max-w-4xl text-[2.35rem] font-semibold leading-[1.08] tracking-[-0.01em] text-[#07111f] sm:text-4xl lg:text-[3.1rem]"
             >
               Connecting informal workers to opportunity through AI.
             </h1>
@@ -102,7 +102,7 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
               Zaa ai connects workers, traders, artisans, and job seekers to the opportunities and financial services they need through conversational AI.
             </p>
 
-            <div data-hero-intro className="mt-7 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+            <div data-hero-intro className="mt-7 flex flex-col gap-3 min-[430px]:flex-row lg:flex-col xl:flex-row">
               <a
                 href={whatsappChatUrl}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#1769ff] px-6 text-base font-medium text-white transition-colors duration-150 ease-out hover:bg-[#0f56d9] motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4"
@@ -120,13 +120,13 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
           </div>
         </div>
 
-        <div className="mt-14 grid gap-4 lg:grid-cols-[1.2fr_0.72fr_0.58fr] lg:gap-5">
-          <ImageTile image={heroImages.worker} className="min-h-[320px] sm:min-h-[420px] lg:min-h-[520px]" />
-          <div className="grid gap-4 lg:gap-5">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:mt-14 lg:grid-cols-[1.2fr_0.72fr_0.58fr] lg:gap-5">
+          <ImageTile image={heroImages.worker} className="min-h-[260px] sm:col-span-2 sm:min-h-[420px] lg:col-span-1 lg:min-h-[520px]" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-5">
             <ImageTile image={heroImages.worker1} className="min-h-[220px] lg:min-h-0" objectPosition="center 35%" />
             <div
               data-hero-image
-              className="group relative overflow-hidden rounded-lg border border-[#d7e2f0] bg-[#07111f] p-5 text-white motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:hover:-translate-y-1"
+              className="group relative min-h-[220px] overflow-hidden rounded-lg border border-[#d7e2f0] bg-[#07111f] p-5 text-white motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:hover:-translate-y-1 lg:min-h-0"
             >
               <img
                 src={heroImages.worker4.src}
@@ -144,10 +144,10 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
               </div>
             </div>
           </div>
-          <div className="grid gap-4 lg:gap-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:gap-5">
             <div
               data-hero-image
-              className="relative overflow-hidden rounded-lg bg-[#07111f] p-5 text-white motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:hover:-translate-y-1"
+              className="relative min-h-[220px] overflow-hidden rounded-lg bg-[#07111f] p-5 text-white motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:hover:-translate-y-1 lg:min-h-0"
             >
               <img
                 src={heroImages.worker3.src}

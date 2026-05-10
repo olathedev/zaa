@@ -72,10 +72,10 @@ export function FaqSection() {
   )
 
   return (
-    <section ref={sectionRef} id="faq" className="bg-white px-5 py-20 sm:px-8 lg:py-28">
+    <section ref={sectionRef} id="faq" className="bg-white px-5 py-14 sm:px-8 sm:py-20 lg:py-28">
       <div className="mx-auto max-w-5xl">
-        <div data-faq-reveal className="mx-auto mb-16 text-center lg:mb-20">
-          <h2 className="text-4xl font-semibold leading-tight tracking-[-0.01em] text-[#1d2230] sm:text-5xl lg:text-6xl">
+        <div data-faq-reveal className="mx-auto mb-10 text-center sm:mb-16 lg:mb-20">
+          <h2 className="text-3xl font-semibold leading-tight tracking-[-0.01em] text-[#1d2230] sm:text-5xl lg:text-6xl">
             Frequently Asked Questions
           </h2>
         </div>
@@ -92,13 +92,13 @@ export function FaqSection() {
                   aria-expanded={isOpen}
                   aria-controls={itemId}
                   onClick={() => setOpenQuestion(isOpen ? '' : faq.question)}
-                  className="flex min-h-24 w-full items-center justify-between gap-6 px-4 py-7 text-left text-lg font-semibold text-black transition-colors duration-150 ease-out hover:text-[#1769ff] focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 sm:px-8 sm:text-xl"
+                  className="flex min-h-18 w-full items-center justify-between gap-4 px-0 py-5 text-left text-base font-semibold text-black transition-colors duration-150 ease-out hover:text-[#1769ff] focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 sm:min-h-24 sm:px-8 sm:py-7 sm:text-xl"
                 >
                   <span>
                     {index + 1}. {faq.question}
                   </span>
-                  <span className="flex size-10 shrink-0 items-center justify-center text-black">
-                    {isOpen ? <Minus className="size-6" aria-hidden="true" /> : <Plus className="size-6" aria-hidden="true" />}
+                  <span className="flex size-8 shrink-0 items-center justify-center text-black sm:size-10">
+                    {isOpen ? <Minus className="size-5 sm:size-6" aria-hidden="true" /> : <Plus className="size-5 sm:size-6" aria-hidden="true" />}
                   </span>
                 </button>
                 <div
@@ -106,7 +106,7 @@ export function FaqSection() {
                   className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
                 >
                   <div className="overflow-hidden">
-                    <p className="max-w-3xl px-4 pb-8 text-base leading-8 text-[#475569] sm:px-8 sm:text-lg">{faq.answer}</p>
+                    <p className="max-w-3xl pb-6 text-sm leading-7 text-[#475569] sm:px-8 sm:pb-8 sm:text-lg sm:leading-8">{faq.answer}</p>
                   </div>
                 </div>
               </div>

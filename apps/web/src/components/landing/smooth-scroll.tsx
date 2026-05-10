@@ -3,23 +3,26 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ReactLenis } from 'lenis/react'
 
 export function SmoothScroll({ children }: { children: ReactNode }) {
-  const [reducedMotion, setReducedMotion] = useState(true)
+  const [disableSmoothScroll, setDisableSmoothScroll] = useState(true)
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const updateMotionPreference = () => {
-      setReducedMotion(mediaQuery.matches)
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const mobileQuery = window.matchMedia('(max-width: 767px)')
+    const updateScrollPreference = () => {
+      setDisableSmoothScroll(reducedMotionQuery.matches || mobileQuery.matches)
     }
 
-    updateMotionPreference()
-    mediaQuery.addEventListener('change', updateMotionPreference)
+    updateScrollPreference()
+    reducedMotionQuery.addEventListener('change', updateScrollPreference)
+    mobileQuery.addEventListener('change', updateScrollPreference)
 
     return () => {
-      mediaQuery.removeEventListener('change', updateMotionPreference)
+      reducedMotionQuery.removeEventListener('change', updateScrollPreference)
+      mobileQuery.removeEventListener('change', updateScrollPreference)
     }
   }, [])
 
-  if (reducedMotion) {
+  if (disableSmoothScroll) {
     return children
   }
 

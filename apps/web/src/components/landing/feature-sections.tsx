@@ -190,16 +190,16 @@ export function FeatureSections({ whatsappChatUrl }: { whatsappChatUrl: string }
   )
 
   return (
-    <section ref={sectionRef} id="features" className="bg-white px-5 pb-10 pt-20 sm:px-8 lg:pb-12 lg:pt-28">
+    <section ref={sectionRef} id="features" className="bg-white px-5 pb-8 pt-14 sm:px-8 sm:pt-20 lg:pb-12 lg:pt-28">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-12 max-w-3xl lg:mb-28">
+        <div className="mb-8 max-w-3xl sm:mb-12 lg:mb-28">
           <p className="text-sm font-medium uppercase tracking-[0.16em] text-[#175cd3]">How Zaa works</p>
-          <h2 className="mt-4 text-3xl font-semibold leading-tight text-[#07111f] sm:text-4xl">
+          <h2 className="mt-4 text-2xl font-semibold leading-tight text-[#07111f] sm:text-4xl">
             Built around WhatsApp, work, and the financial identity people already earn every day.
           </h2>
         </div>
 
-        <div className="space-y-10 lg:space-y-0 lg:pb-16">
+        <div className="space-y-6 sm:space-y-8 lg:space-y-0 lg:pb-16">
           {features.map((feature, index) => (
             <FeatureCard key={feature.id} feature={feature} index={index} whatsappChatUrl={whatsappChatUrl} />
           ))}
@@ -221,7 +221,7 @@ function FeatureCard({
   const phone = (
     <div
       data-feature-phone
-      className={`relative z-20 mx-auto flex w-full max-w-[15.5rem] justify-center lg:absolute lg:-top-24 lg:max-w-[20rem] xl:-top-28 xl:max-w-[21.5rem] ${
+      className={`relative z-20 mx-auto flex w-full max-w-[13.5rem] justify-center sm:max-w-[15.5rem] lg:absolute lg:-top-24 lg:max-w-[20rem] xl:-top-28 xl:max-w-[21.5rem] ${
         feature.phoneSide === 'left' ? 'lg:left-[7%]' : 'lg:right-[7%]'
       }`}
     >
@@ -241,16 +241,16 @@ function FeatureCard({
       <p data-feature-copy className={`text-sm font-semibold uppercase tracking-[0.16em] ${feature.eyebrowClassName}`}>
         {feature.eyebrow}
       </p>
-      <h3 data-feature-copy className={`mt-5 text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl ${feature.titleClassName}`}>
+      <h3 data-feature-copy className={`mt-5 text-2xl font-semibold leading-tight sm:text-4xl lg:text-5xl ${feature.titleClassName}`}>
         {feature.title}
       </h3>
-      <p data-feature-copy className={`mt-6 text-base leading-8 sm:text-lg ${feature.bodyClassName}`}>
+      <p data-feature-copy className={`mt-5 text-base leading-7 sm:mt-6 sm:leading-8 sm:text-lg ${feature.bodyClassName}`}>
         {feature.body}
       </p>
       <a
         data-feature-copy
         href={whatsappChatUrl}
-        className={`mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-6 text-base font-medium transition-colors duration-150 ease-out motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 ${feature.buttonClassName}`}
+        className={`mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-6 text-base font-medium transition-colors duration-150 ease-out motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 sm:w-fit ${feature.buttonClassName}`}
       >
         <WhatsAppIcon className="size-4" />
         {feature.cta}
@@ -267,7 +267,7 @@ function FeatureCard({
     >
       <div
         data-feature-surface
-        className={`relative rounded-[2rem] px-6 py-10 shadow-sm sm:px-10 lg:px-16 lg:py-20 ${feature.panelClassName}`}
+        className={`relative rounded-[1.5rem] px-5 py-8 shadow-sm sm:rounded-[2rem] sm:px-10 sm:py-10 lg:px-16 lg:py-20 ${feature.panelClassName}`}
       >
         <div data-feature-accent className={`absolute inset-x-8 top-0 h-1 rounded-full ${feature.accentClassName}`} />
         <div className="grid gap-8 lg:block">
