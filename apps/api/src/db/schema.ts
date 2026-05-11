@@ -35,6 +35,21 @@ export const onboardingStage = pgEnum("onboarding_stage", [
   "completed",
 ]);
 
+export const workerProfileStatus = pgEnum("worker_profile_status", [
+  "not_started",
+  "in_progress",
+  "assessment_pending",
+  "assessment_in_progress",
+  "completed",
+]);
+
+export const workerAssessmentStatus = pgEnum("worker_assessment_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "failed",
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   displayName: text("display_name"),
@@ -148,13 +163,82 @@ export const workerProfiles = pgTable("worker_profiles", {
     .references(() => users.id, { onDelete: "cascade" })
     .unique(),
   occupation: text("occupation"),
+  serviceTitle: text("service_title"),
   location: text("location"),
   incomeRange: text("income_range"),
   skills: text("skills").array().default([]).notNull(),
+  experienceLevel: text("experience_level"),
+  availability: text("availability"),
+  expectedPayRange: text("expected_pay_range"),
+  proofType: text("proof_type"),
+  profileStatus: workerProfileStatus("profile_status")
+    .default("not_started")
+    .notNull(),
+  assessmentStatus: workerAssessmentStatus("assessment_status")
+    .default("pending")
+    .notNull(),
+  assessmentScore: integer("assessment_score"),
   trustScore: integer("trust_score").default(0).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const workerProfileAssessments = pgTable(
+  "worker_profile_assessments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workerProfileId: uuid("worker_profile_id")
+      .notNull()
+      .references(() => workerProfiles.id, { onDelete: "cascade" }),
+    serviceTitle: text("service_title").notNull(),
+    questions: jsonb("questions").$type<Record<string, unknown>[]>().default([]).notNull(),
+    answers: jsonb("answers").$type<Record<string, unknown>[]>().default([]).notNull(),
+    score: integer("score"),
+    status: workerAssessmentStatus("status").default("pending").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("worker_profile_assessments_user_id_idx").on(table.userId),
+    index("worker_profile_assessments_worker_profile_id_idx").on(table.workerProfileId),
+  ],
+);
+
+export const workerTrustEvaluations = pgTable(
+  "worker_trust_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workerProfileId: uuid("worker_profile_id")
+      .notNull()
+      .references(() => workerProfiles.id, { onDelete: "cascade" }),
+    assessmentId: uuid("assessment_id").references(() => workerProfileAssessments.id, {
+      onDelete: "set null",
+    }),
+    trustScore: integer("trust_score").notNull(),
+    skillScore: integer("skill_score").notNull(),
+    reliabilityScore: integer("reliability_score").notNull(),
+    profileStrengthScore: integer("profile_strength_score").notNull(),
+    riskLevel: text("risk_level").notNull(),
+    reasons: jsonb("reasons").$type<string[]>().default([]).notNull(),
+    improvementTips: jsonb("improvement_tips").$type<string[]>().default([]).notNull(),
+    inputSignals: jsonb("input_signals").$type<Record<string, unknown>>().default({}).notNull(),
+    aiOutput: jsonb("ai_output").$type<Record<string, unknown>>().default({}).notNull(),
+    evaluator: text("evaluator").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("worker_trust_evaluations_user_id_idx").on(table.userId),
+    index("worker_trust_evaluations_worker_profile_id_idx").on(table.workerProfileId),
+  ],
+);
 
 export const messages = pgTable(
   "messages",

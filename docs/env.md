@@ -25,3 +25,4 @@ cp .env.example .env
 - `SQUAD_BENEFICIARY_ACCOUNT`: settlement/beneficiary account passed to Squad when creating virtual accounts.
 - `SQUAD_WEBHOOK_SIGNATURE_VERSION`: Squad webhook signature version. Defaults to `v3`.
 - `OPENAI_API_KEY`: API key for the LLM provider.
+- `OPENAI_MODEL`: optional model for worker competence assessment generation. Defaults to `gpt-4o-mini`.

@@ -17,6 +17,10 @@ import {
   sendOnboardingStartPrompt,
   sendWhatsAppMessage,
 } from "../whatsapp/twilio-whatsapp.service.js";
+import {
+  handleWorkerProfileMessage,
+  sendWorkerProfileStartInvite,
+} from "../worker-profile/worker-profile-flow.service.js";
 import { parseAccountType } from "./account-type.js";
 import {
   getInitialOnboardingData,
@@ -54,6 +58,17 @@ export async function handleIncomingWhatsAppMessage(
 
   if (userWithContact.user.onboardingStage === "profile_pending") {
     await handleProfilePendingStep(userWithContact, message);
+    return;
+  }
+
+  if (
+    userWithContact.user.onboardingStage === "completed" &&
+    userWithContact.user.accountType === "worker"
+  ) {
+    await handleWorkerProfileMessage({
+      user: userWithContact.user,
+      message,
+    });
     return;
   }
 
@@ -237,6 +252,16 @@ async function handleConversationalOnboardingStep(
       to: message.from,
       body: completionResult.message,
     });
+
+    if (
+      completionResult.completed &&
+      userWithContact.user.accountType === "worker"
+    ) {
+      await sendWorkerProfileStartInvite({
+        to: message.from,
+      });
+    }
+
     return;
   }
 
@@ -384,7 +409,7 @@ async function completeOnboarding(params: {
       "Your Zaa account is ready.\n\n" +
       `Virtual account: ${virtualAccountNumber}\n` +
       `Bank code: ${squadAccount.bank_code ?? "pending"}\n\n` +
-      "You can now use Zaa to track opportunities and receive payments.",
+      "You can now receive payments and build your work profile for opportunities.",
   };
 }
 

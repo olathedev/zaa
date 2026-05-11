@@ -63,4 +63,8 @@ export const env = {
   onboarding: {
     defaultEmail: process.env.DEFAULT_ONBOARDING_EMAIL,
   },
+  ai: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  },
 };
