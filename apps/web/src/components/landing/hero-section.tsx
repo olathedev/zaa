@@ -50,6 +50,18 @@ const heroImages = {
 		width: 3840,
 		height: 5760,
 	},
+	worker6: {
+		src: "/worker6.jpg",
+		alt: "Worker photographed outdoors during a workday",
+		width: 3879,
+		height: 5818,
+	},
+	worker7: {
+		src: "/worker7.jpg",
+		alt: "Worker representing everyday informal economy opportunity",
+		width: 3602,
+		height: 4802,
+	},
 	workerTechnology: {
 		src: "/worker.png",
 		alt: "Worker using technology to access new opportunities",
@@ -62,15 +74,20 @@ const HERO_IMAGE_CHANGE_DELAY_MS = 5600;
 const HERO_IMAGE_TRANSITION_MS = 1400;
 
 const heroImageGroups = {
-	main: [heroImages.worker, heroImages.worker4, heroImages.worker5],
-	craft: [heroImages.worker1, heroImages.worker5, heroImages.worker4],
+	main: [
+		heroImages.worker,
+		heroImages.worker4,
+		heroImages.worker6,
+		heroImages.worker5,
+	],
+	craft: [heroImages.worker1, heroImages.worker5, heroImages.worker7],
 	opportunity: [
 		heroImages.workerTechnology,
 		heroImages.worker4,
-		heroImages.worker5,
+		heroImages.worker6,
 	],
-	signal: [heroImages.worker3, heroImages.worker5, heroImages.worker4],
-	livelihood: [heroImages.worker2, heroImages.worker4, heroImages.worker5],
+	signal: [heroImages.worker3, heroImages.worker7, heroImages.worker5],
+	livelihood: [heroImages.worker2, heroImages.worker6, heroImages.worker7],
 } satisfies Record<string, HeroImage[]>;
 
 export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
