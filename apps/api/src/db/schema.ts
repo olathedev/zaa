@@ -93,6 +93,54 @@ export const virtualAccounts = pgTable(
   (table) => [index("virtual_accounts_user_id_idx").on(table.userId)],
 );
 
+export const walletBalances = pgTable(
+  "wallet_balances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" })
+      .unique(),
+    availableBalance: integer("available_balance").default(0).notNull(),
+    ledgerBalance: integer("ledger_balance").default(0).notNull(),
+    currency: text("currency").default("NGN").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("wallet_balances_user_id_idx").on(table.userId)],
+);
+
+export const paymentTransactions = pgTable(
+  "payment_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    virtualAccountId: uuid("virtual_account_id")
+      .notNull()
+      .references(() => virtualAccounts.id, { onDelete: "cascade" }),
+    provider: text("provider").default("squad").notNull(),
+    transactionReference: text("transaction_reference").notNull().unique(),
+    gatewayReference: text("gateway_reference"),
+    amount: integer("amount").notNull(),
+    settledAmount: integer("settled_amount").notNull(),
+    fee: integer("fee").default(0).notNull(),
+    currency: text("currency").default("NGN").notNull(),
+    status: text("status").notNull(),
+    channel: text("channel"),
+    customerIdentifier: text("customer_identifier").notNull(),
+    virtualAccountNumber: text("virtual_account_number").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("payment_transactions_user_id_idx").on(table.userId),
+    index("payment_transactions_virtual_account_id_idx").on(table.virtualAccountId),
+  ],
+);
+
 export const workerProfiles = pgTable("worker_profiles", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")

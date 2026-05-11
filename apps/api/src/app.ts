@@ -5,6 +5,7 @@ import morgan from "morgan";
 
 import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.routes.js";
+import { squadWebhookRouter } from "./routes/webhooks/squad.routes.js";
 import { twilioWhatsAppWebhookRouter } from "./routes/webhooks/twilio-whatsapp.routes.js";
 
 export function createApp() {
@@ -17,7 +18,13 @@ export function createApp() {
       origin: env.webOrigin,
     }),
   );
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: false }));
 
   app.get("/", (_req, res) => {
@@ -28,6 +35,7 @@ export function createApp() {
   });
 
   app.use("/health", healthRouter);
+  app.use("/webhooks/squad", squadWebhookRouter);
   app.use("/webhooks/twilio", twilioWhatsAppWebhookRouter);
   app.use("/webhooks/twilio/whatsapp", twilioWhatsAppWebhookRouter);
   app.use(errorHandler);
