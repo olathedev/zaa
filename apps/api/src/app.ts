@@ -21,7 +21,7 @@ export function createApp() {
   app.use(
     express.json({
       verify: (req, _res, buf) => {
-        req.rawBody = buf;
+        (req as express.Request).rawBody = buf;
       },
     }),
   );

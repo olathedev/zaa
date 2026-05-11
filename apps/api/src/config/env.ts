@@ -58,6 +58,7 @@ export const env = {
     baseUrl: process.env.SQUAD_BASE_URL ?? "https://sandbox-api-d.squadco.com",
     secretKey: process.env.SQUAD_SECRET_KEY,
     beneficiaryAccount: process.env.SQUAD_BENEFICIARY_ACCOUNT,
+    webhookSignatureVersion: process.env.SQUAD_WEBHOOK_SIGNATURE_VERSION ?? "v3",
   },
   onboarding: {
     defaultEmail: process.env.DEFAULT_ONBOARDING_EMAIL,

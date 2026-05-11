@@ -23,4 +23,5 @@ cp .env.example .env
 - `SQUAD_BASE_URL`: Squad API base URL. Defaults to the sandbox API.
 - `SQUAD_SECRET_KEY`: Squad API secret key used to create virtual accounts.
 - `SQUAD_BENEFICIARY_ACCOUNT`: settlement/beneficiary account passed to Squad when creating virtual accounts.
+- `SQUAD_WEBHOOK_SIGNATURE_VERSION`: Squad webhook signature version. Defaults to `v3`.
 - `OPENAI_API_KEY`: API key for the LLM provider.
