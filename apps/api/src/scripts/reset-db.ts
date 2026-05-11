@@ -9,6 +9,7 @@ import {
   walletBalances,
   workerProfileAssessments,
   workerProfiles,
+  workerTrustEvaluations,
 } from "../db/schema.js";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
@@ -27,6 +28,7 @@ await db.delete(paymentTransactions);
 await db.delete(walletBalances);
 await db.delete(userSecurity);
 await db.delete(virtualAccounts);
+await db.delete(workerTrustEvaluations);
 await db.delete(workerProfileAssessments);
 await db.delete(workerProfiles);
 await db.delete(whatsappContacts);

@@ -7,6 +7,7 @@ import {
   workerProfiles,
   type users,
 } from "../../db/schema.js";
+import { evaluateWorkerTrust } from "../trust/worker-trust.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 import {
@@ -506,8 +507,13 @@ async function completeAssessment(params: {
     questions,
     answers,
   });
-  const trustScore = Math.min(100, Math.max(params.profile.trustScore, 40 + Math.round(score * 0.6)));
   const data = normalizeProfileFlowData(params.profile.metadata);
+  const trustEvaluation = await evaluateWorkerTrust({
+    profile: params.profile,
+    assessment: params.assessment,
+    assessmentScore: score,
+  });
+  const trustScore = trustEvaluation.trustScore;
 
   await db
     .update(workerProfileAssessments)
@@ -529,6 +535,9 @@ async function completeAssessment(params: {
         ...data,
         currentQuestionIndex: undefined,
         lastAssessmentId: params.assessment.id,
+        lastTrustEvaluationId: trustEvaluation.id,
+        trustReasons: trustEvaluation.reasons,
+        trustImprovementTips: trustEvaluation.improvementTips,
       },
       updatedAt: new Date(),
     })
@@ -540,6 +549,7 @@ async function completeAssessment(params: {
       "Your profile is ready. I'll start matching you with suitable opportunities.\n\n" +
       `Skill check score: ${score}%\n` +
       `Zaa trust score: ${trustScore}/100\n\n` +
+      `Why: ${trustEvaluation.reasons.slice(0, 2).join(" ")}\n\n` +
       "You can now receive job matches and customer requests here.",
   });
 }

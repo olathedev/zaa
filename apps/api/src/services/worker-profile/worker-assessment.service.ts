@@ -113,7 +113,9 @@ async function generateWithOpenAi(
           role: "system",
           content:
             "You create short WhatsApp competence tests for Nigerian workers. " +
-            "Return only valid JSON. Keep questions practical, local, and easy to answer.",
+            "Return only valid JSON. Questions must test the worker's actual stated service and skills, not generic workplace behavior. " +
+            "Use practical real-life Nigerian scenarios a customer or employer would care about. " +
+            "Keep each question short enough for WhatsApp and easy to answer with A, B, or C.",
         },
         {
           role: "user",
@@ -123,6 +125,12 @@ async function generateWithOpenAi(
             `Skills: ${params.skills.join(", ")}\n` +
             `Experience: ${params.experienceLevel}\n` +
             `Location: ${params.location}\n\n` +
+            "Rules:\n" +
+            "- Each question must be specific to the service and skills above.\n" +
+            "- Use practical scenarios from real jobs, customer requests, tools, materials, pricing, safety, quality checks, or common mistakes.\n" +
+            "- Avoid generic questions like communication, punctuality, or customer service unless they are tied to the actual work.\n" +
+            "- Make the correct answer show real competence in the stated service.\n" +
+            "- Keep options realistic; wrong answers should be plausible but clearly weaker.\n\n" +
             "JSON shape: {\"questions\":[{\"id\":\"q1\",\"prompt\":\"...\",\"options\":[{\"key\":\"A\",\"text\":\"...\"},{\"key\":\"B\",\"text\":\"...\"},{\"key\":\"C\",\"text\":\"...\"}],\"correctOption\":\"A\",\"explanation\":\"...\"}]}",
         },
       ],

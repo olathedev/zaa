@@ -43,6 +43,13 @@
       "when": 1778489070070,
       "tag": "0005_organic_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778490979145,
+      "tag": "0006_gigantic_black_widow",
+      "breakpoints": true
     }
   ]
 }
