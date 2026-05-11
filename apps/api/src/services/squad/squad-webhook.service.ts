@@ -7,7 +7,9 @@ import {
   paymentTransactions,
   virtualAccounts,
   walletBalances,
+  whatsappContacts,
 } from "../../db/schema.js";
+import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 
 type SquadWebhookPayload = Record<string, unknown>;
 
@@ -134,12 +136,56 @@ export async function processSquadPaymentWebhook(payload: SquadWebhookPayload) {
       },
     });
 
+  await sendPaymentReceivedNotification({
+    userId: virtualAccount.userId,
+    amount: payment.settledAmount,
+    currency: payment.currency,
+    transactionReference: payment.transactionReference,
+  });
+
   return {
     credited: true,
     duplicate: false,
     transactionReference: payment.transactionReference,
     message: "Payment credited",
   };
+}
+
+async function sendPaymentReceivedNotification(params: {
+  userId: string;
+  amount: number;
+  currency: string;
+  transactionReference: string;
+}) {
+  const db = getDb();
+  const contact = await db.query.whatsappContacts.findFirst({
+    where: eq(whatsappContacts.userId, params.userId),
+  });
+
+  if (!contact) {
+    console.warn("Skipping payment notification: user has no WhatsApp contact", {
+      userId: params.userId,
+      transactionReference: params.transactionReference,
+    });
+    return;
+  }
+
+  try {
+    await sendWhatsAppMessage({
+      to: contact.phoneNumber,
+      body:
+        "Payment received ✅\n\n" +
+        `Amount: ${formatMoney(params.amount, params.currency)}\n` +
+        "Your Zaa balance has been updated.\n\n" +
+        `Reference: ${params.transactionReference}`,
+    });
+  } catch (error) {
+    console.error("Failed to send payment WhatsApp notification", {
+      userId: params.userId,
+      transactionReference: params.transactionReference,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export function normalizeSquadPayment(payload: SquadWebhookPayload): NormalizedSquadPayment {
@@ -251,4 +297,17 @@ function toMinorUnits(value: number | undefined) {
   }
 
   return Number.isInteger(value) ? value : Math.round(value * 100);
+}
+
+function formatMoney(amountInMinorUnits: number, currency: string) {
+  const amount = amountInMinorUnits / 100;
+
+  if (currency === "NGN") {
+    return `₦${amount.toLocaleString("en-NG", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  return `${currency} ${amount.toFixed(2)}`;
 }
