@@ -20,6 +20,8 @@ cp .env.example .env
 - `TWILIO_ONBOARDING_ACCOUNT_TYPE_LIST_PICKER_CONTENT_SID`: optional Twilio Content SID for the onboarding account type list picker.
 - `TWILIO_ONBOARDING_USE_FLOW_TEMPLATE`: set to `true` only when a production WhatsApp Flow content template is approved and usable.
 - `TWILIO_ONBOARDING_START_CONTENT_SID`: optional Twilio Content SID for the button prompt that starts full onboarding.
+- `TWILIO_EMPLOYER_WELCOME_IMAGE_URL`: optional public image URL sent to employers after account onboarding completes, before the employer home menu.
+- `TWILIO_WORKER_WELCOME_IMAGE_URL`: optional public image URL sent to workers after account onboarding completes, before the worker profile/options invite.
 - `SQUAD_BASE_URL`: Squad API base URL. Defaults to the sandbox API.
 - `SQUAD_SECRET_KEY`: Squad API secret key used to create virtual accounts.
 - `SQUAD_BENEFICIARY_ACCOUNT`: settlement/beneficiary account passed to Squad when creating virtual accounts.

@@ -28,8 +28,24 @@ type SquadResponse = {
   success?: boolean;
   status?: number | string;
   message?: string;
+  code?: string | number;
   data?: SquadVirtualAccount;
+  errors?: unknown;
 };
+
+export class SquadVirtualAccountError extends Error {
+  status: number;
+  responseBody: SquadResponse;
+
+  constructor(params: { status: number; responseBody: SquadResponse }) {
+    super(
+      `Squad virtual account creation failed: ${params.status} ${JSON.stringify(params.responseBody)}`,
+    );
+    this.name = "SquadVirtualAccountError";
+    this.status = params.status;
+    this.responseBody = params.responseBody;
+  }
+}
 
 export async function createSquadVirtualAccount(
   params: CreateSquadVirtualAccountParams,
@@ -66,9 +82,10 @@ export async function createSquadVirtualAccount(
   const responseBody = (await response.json()) as SquadResponse;
 
   if (!response.ok || responseBody.success === false) {
-    throw new Error(
-      `Squad virtual account creation failed: ${response.status} ${JSON.stringify(responseBody)}`,
-    );
+    throw new SquadVirtualAccountError({
+      status: response.status,
+      responseBody,
+    });
   }
 
   if (!responseBody.data?.virtual_account_number || !responseBody.data.customer_identifier) {
@@ -77,4 +94,3 @@ export async function createSquadVirtualAccount(
 
   return responseBody.data;
 }
-

@@ -9,12 +9,20 @@ import {
   virtualAccounts,
   whatsappContacts,
 } from "../../db/schema.js";
+import {
+  handleEmployerMenuMessage,
+  sendEmployerHomeMenu,
+} from "../employer/employer-menu.service.js";
 import { hashTransactionPin } from "../security/pin.service.js";
-import { createSquadVirtualAccount } from "../squad/squad-virtual-account.service.js";
+import {
+  createSquadVirtualAccount,
+  SquadVirtualAccountError,
+} from "../squad/squad-virtual-account.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import {
   sendOnboardingAccountTypePrompt,
   sendOnboardingStartPrompt,
+  sendWhatsAppMediaMessage,
   sendWhatsAppMessage,
 } from "../whatsapp/twilio-whatsapp.service.js";
 import {
@@ -66,6 +74,17 @@ export async function handleIncomingWhatsAppMessage(
     userWithContact.user.accountType === "worker"
   ) {
     await handleWorkerProfileMessage({
+      user: userWithContact.user,
+      message,
+    });
+    return;
+  }
+
+  if (
+    userWithContact.user.onboardingStage === "completed" &&
+    userWithContact.user.accountType === "employer"
+  ) {
+    await handleEmployerMenuMessage({
       user: userWithContact.user,
       message,
     });
@@ -148,6 +167,42 @@ async function saveInboundMessage(params: {
       metadata: removeSensitiveWebhookFields(params.message.raw),
     })
     .onConflictDoNothing();
+}
+
+async function sendWorkerWelcomeImage(params: { to: string }) {
+  if (!env.twilio.workerWelcomeImageUrl) {
+    return;
+  }
+
+  try {
+    await sendWhatsAppMediaMessage({
+      to: params.to,
+      mediaUrl: env.twilio.workerWelcomeImageUrl,
+    });
+  } catch (error) {
+    console.error("Failed to send worker welcome image", {
+      to: params.to,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function sendEmployerWelcomeImage(params: { to: string }) {
+  if (!env.twilio.employerWelcomeImageUrl) {
+    return;
+  }
+
+  try {
+    await sendWhatsAppMediaMessage({
+      to: params.to,
+      mediaUrl: env.twilio.employerWelcomeImageUrl,
+    });
+  } catch (error) {
+    console.error("Failed to send employer welcome image", {
+      to: params.to,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function handleAccountTypeStep(
@@ -257,7 +312,22 @@ async function handleConversationalOnboardingStep(
       completionResult.completed &&
       userWithContact.user.accountType === "worker"
     ) {
+      await sendWorkerWelcomeImage({
+        to: message.from,
+      });
       await sendWorkerProfileStartInvite({
+        to: message.from,
+      });
+    }
+
+    if (
+      completionResult.completed &&
+      userWithContact.user.accountType === "employer"
+    ) {
+      await sendEmployerWelcomeImage({
+        to: message.from,
+      });
+      await sendEmployerHomeMenu({
         to: message.from,
       });
     }
@@ -338,13 +408,24 @@ async function completeOnboarding(params: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const retryStep = getRetryStepForSquadError(message);
+    const failureReason = getSquadFailureReason(error);
+
+    logSquadVirtualAccountError({
+      error,
+      userId: params.userWithContact.user.id,
+      accountType: params.userWithContact.user.accountType,
+      retryStep,
+    });
 
     return {
       completed: false,
       retryStep,
       message:
         "I couldn't finish creating your virtual account yet.\n\n" +
-        getRetryMessageForStep(retryStep),
+        getRetryMessageForStep({
+          step: retryStep,
+          failureReason,
+        }),
     };
   }
   const customerIdentifier = requireValue(
@@ -405,12 +486,29 @@ async function completeOnboarding(params: {
   return {
     completed: true,
     retryStep: undefined,
-    message:
-      "Your Zaa account is ready.\n\n" +
-      `Virtual account: ${virtualAccountNumber}\n` +
-      `Bank code: ${squadAccount.bank_code ?? "pending"}\n\n` +
-      "You can now receive payments and build your work profile for opportunities.",
+    message: getOnboardingCompletionMessage({
+      accountType: params.userWithContact.user.accountType,
+      virtualAccountNumber,
+      bankCode: squadAccount.bank_code,
+    }),
   };
+}
+
+function getOnboardingCompletionMessage(params: {
+  accountType: string | null;
+  virtualAccountNumber: string;
+  bankCode?: string | null;
+}) {
+  const baseMessage =
+    "Your Zaa account is ready.\n\n" +
+    `Virtual account: ${params.virtualAccountNumber}\n` +
+    `Bank code: ${params.bankCode ?? "pending"}\n\n`;
+
+  if (params.accountType === "employer") {
+    return baseMessage + "You can now post work requests and manage wallet payments.";
+  }
+
+  return baseMessage + "You can now receive payments and build your work profile for opportunities.";
 }
 
 function stripTransientOnboardingData(
@@ -481,6 +579,33 @@ function createFallbackEmail(userId: string) {
   return env.onboarding.defaultEmail ?? `user-${userId.replaceAll("-", "")}@example.com`;
 }
 
+type SquadFailureReason = "bvn_already_registered" | "email" | "bvn" | "unknown";
+
+function getSquadFailureReason(error: unknown): SquadFailureReason {
+  const normalized = getSquadErrorText(error);
+
+  if (
+    normalized.includes("already") ||
+    normalized.includes("exist") ||
+    normalized.includes("duplicate") ||
+    normalized.includes("registered")
+  ) {
+    if (normalized.includes("bvn") || normalized.includes("customer")) {
+      return "bvn_already_registered";
+    }
+  }
+
+  if (normalized.includes("email")) {
+    return "email";
+  }
+
+  if (normalized.includes("bvn")) {
+    return "bvn";
+  }
+
+  return "unknown";
+}
+
 function getRetryStepForSquadError(message: string): ConversationalOnboardingStep {
   const normalized = message.toLowerCase();
 
@@ -495,10 +620,73 @@ function getRetryStepForSquadError(message: string): ConversationalOnboardingSte
   return "bvn";
 }
 
-function getRetryMessageForStep(step: ConversationalOnboardingStep) {
-  if (step === "email") {
+function getRetryMessageForStep(params: {
+  step: ConversationalOnboardingStep;
+  failureReason: SquadFailureReason;
+}) {
+  if (params.failureReason === "bvn_already_registered") {
+    return (
+      "This BVN already appears to be linked to a virtual account.\n\n" +
+      "Please use a BVN that has not been used on Zaa before, or contact support if this BVN belongs to you."
+    );
+  }
+
+  if (params.step === "email") {
     return "Please reply with a valid email address so I can try again.";
   }
 
   return "Please check your BVN and reply with the correct 11-digit BVN so I can try again.";
+}
+
+function logSquadVirtualAccountError(params: {
+  error: unknown;
+  userId: string;
+  accountType: string | null;
+  retryStep: ConversationalOnboardingStep;
+}) {
+  if (params.error instanceof SquadVirtualAccountError) {
+    console.error("Squad virtual account creation failed", {
+      userId: params.userId,
+      accountType: params.accountType,
+      retryStep: params.retryStep,
+      status: params.error.status,
+      responseBody: redactSensitiveSquadFields(params.error.responseBody),
+    });
+    return;
+  }
+
+  console.error("Squad virtual account creation failed", {
+    userId: params.userId,
+    accountType: params.accountType,
+    retryStep: params.retryStep,
+    error: params.error instanceof Error ? params.error.message : String(params.error),
+  });
+}
+
+function getSquadErrorText(error: unknown) {
+  if (error instanceof SquadVirtualAccountError) {
+    return JSON.stringify(error.responseBody).toLowerCase();
+  }
+
+  return error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+}
+
+function redactSensitiveSquadFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveSquadFields(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => {
+      if (["bvn", "pin", "password", "secret", "token"].includes(key.toLowerCase())) {
+        return [key, "[redacted]"];
+      }
+
+      return [key, redactSensitiveSquadFields(nestedValue)];
+    }),
+  );
 }

@@ -7,6 +7,12 @@ type SendWhatsAppMessageParams = {
   body: string;
 };
 
+type SendWhatsAppMediaMessageParams = {
+  to: string;
+  mediaUrl: string | string[];
+  body?: string;
+};
+
 type SendWhatsAppContentMessageParams = {
   to: string;
   contentSid: string;
@@ -38,6 +44,17 @@ export async function sendWhatsAppMessage(params: SendWhatsAppMessageParams) {
     from: getWhatsAppFrom(),
     to: params.to,
     body: params.body,
+  });
+}
+
+export async function sendWhatsAppMediaMessage(
+  params: SendWhatsAppMediaMessageParams,
+) {
+  return getTwilioClient().messages.create({
+    from: getWhatsAppFrom(),
+    to: params.to,
+    body: params.body,
+    mediaUrl: Array.isArray(params.mediaUrl) ? params.mediaUrl : [params.mediaUrl],
   });
 }
 
