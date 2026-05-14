@@ -257,6 +257,34 @@ export const messages = pgTable(
   ],
 );
 
+export const workRequestStatus = pgEnum("work_request_status", [
+  "draft",
+  "open",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+
+export const workRequests = pgTable(
+  "work_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    serviceType: text("service_type"),
+    location: text("location"),
+    budget: text("budget"),
+    preferredDate: text("preferred_date"),
+    description: text("description"),
+    status: workRequestStatus("status").default("draft").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("work_requests_user_id_idx").on(table.userId)],
+);
+
 export const opportunities = pgTable("opportunities", {
   id: uuid("id").defaultRandom().primaryKey(),
   title: text("title").notNull(),

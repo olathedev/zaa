@@ -29,12 +29,12 @@ type GenerateWorkerAssessmentParams = {
 export async function generateWorkerAssessment(
   params: GenerateWorkerAssessmentParams,
 ): Promise<WorkerAssessmentQuestion[]> {
-  if (!env.ai.openaiApiKey) {
+  if (!env.ai.claudeApiKey) {
     return buildFallbackAssessment(params);
   }
 
   try {
-    const generatedQuestions = await generateWithOpenAi(params);
+    const generatedQuestions = await generateWithClaude(params);
 
     if (generatedQuestions.length === 5) {
       return generatedQuestions;
@@ -95,28 +95,26 @@ export function formatAssessmentQuestion(params: {
   ].join("\n");
 }
 
-async function generateWithOpenAi(
+async function generateWithClaude(
   params: GenerateWorkerAssessmentParams,
 ): Promise<WorkerAssessmentQuestion[]> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.ai.openaiApiKey}`,
-      "Content-Type": "application/json",
+      "x-api-key": env.ai.claudeApiKey!,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: env.ai.openaiModel,
+      model: env.ai.claudeModel,
+      max_tokens: 2048,
       temperature: 0.4,
-      response_format: { type: "json_object" },
+      system:
+        "You create short WhatsApp competence tests for Nigerian workers. " +
+        "Return only valid JSON with no markdown or extra text. Questions must test the worker's actual stated service and skills, not generic workplace behavior. " +
+        "Use practical real-life Nigerian scenarios a customer or employer would care about. " +
+        "Keep each question short enough for WhatsApp and easy to answer with A, B, or C.",
       messages: [
-        {
-          role: "system",
-          content:
-            "You create short WhatsApp competence tests for Nigerian workers. " +
-            "Return only valid JSON. Questions must test the worker's actual stated service and skills, not generic workplace behavior. " +
-            "Use practical real-life Nigerian scenarios a customer or employer would care about. " +
-            "Keep each question short enough for WhatsApp and easy to answer with A, B, or C.",
-        },
         {
           role: "user",
           content:
@@ -138,21 +136,25 @@ async function generateWithOpenAi(
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI assessment request failed with ${response.status}`);
+    throw new Error(`Claude assessment request failed with ${response.status}`);
   }
 
   const payload = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
+    content?: { type: string; text: string }[];
   };
-  const content = payload.choices?.[0]?.message?.content;
+  const content = payload.content?.[0]?.text;
 
   if (!content) {
-    throw new Error("OpenAI assessment response was empty");
+    throw new Error("Claude assessment response was empty");
   }
 
-  const parsed = JSON.parse(content) as { questions?: WorkerAssessmentQuestion[] };
+  const parsed = JSON.parse(stripMarkdownJson(content)) as { questions?: WorkerAssessmentQuestion[] };
 
   return normalizeQuestions(parsed.questions ?? []);
+}
+
+function stripMarkdownJson(text: string) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 }
 
 function normalizeQuestions(questions: WorkerAssessmentQuestion[]) {

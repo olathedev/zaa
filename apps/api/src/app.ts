@@ -5,6 +5,7 @@ import morgan from "morgan";
 
 import { env } from "./config/env.js";
 import { healthRouter } from "./routes/health.routes.js";
+import { testAiRouter } from "./routes/test-ai.routes.js";
 import { squadWebhookRouter } from "./routes/webhooks/squad.routes.js";
 import { twilioWhatsAppWebhookRouter } from "./routes/webhooks/twilio-whatsapp.routes.js";
 
@@ -35,6 +36,7 @@ export function createApp() {
   });
 
   app.use("/health", healthRouter);
+  app.use("/test/ai", testAiRouter);
   app.use("/webhooks/squad", squadWebhookRouter);
   app.use("/webhooks/twilio", twilioWhatsAppWebhookRouter);
   app.use("/webhooks/twilio/whatsapp", twilioWhatsAppWebhookRouter);

@@ -80,7 +80,7 @@ export async function evaluateWorkerTrust(
       improvementTips: guardedEvaluation.improvementTips,
       inputSignals: signals,
       aiOutput: aiEvaluation,
-      evaluator: env.ai.openaiApiKey ? "openai_with_guardrails" : "fallback_with_guardrails",
+      evaluator: env.ai.claudeApiKey ? "claude_with_guardrails" : "fallback_with_guardrails",
     })
     .returning();
 
@@ -143,29 +143,27 @@ function calculateProfileStrength(profile: typeof workerProfiles.$inferSelect) {
 async function getAiTrustEvaluation(
   signals: WorkerTrustSignals,
 ): Promise<AiTrustEvaluation> {
-  if (!env.ai.openaiApiKey) {
+  if (!env.ai.claudeApiKey) {
     return getFallbackTrustEvaluation(signals);
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.ai.openaiApiKey}`,
-        "Content-Type": "application/json",
+        "x-api-key": env.ai.claudeApiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: env.ai.openaiModel,
+        model: env.ai.claudeModel,
+        max_tokens: 512,
         temperature: 0.2,
-        response_format: { type: "json_object" },
+        system:
+          "You are Zaa's worker trust analyst for Nigerian informal workers. " +
+          "Judge only from the provided signals. Return valid JSON only with no markdown or extra text. " +
+          "Be fair to new users with little history, but do not over-score them.",
         messages: [
-          {
-            role: "system",
-            content:
-              "You are Zaa's worker trust analyst for Nigerian informal workers. " +
-              "Judge only from the provided signals. Return valid JSON only. " +
-              "Be fair to new users with little history, but do not over-score them.",
-          },
           {
             role: "user",
             content:
@@ -178,19 +176,19 @@ async function getAiTrustEvaluation(
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI trust request failed with ${response.status}`);
+      throw new Error(`Claude trust request failed with ${response.status}`);
     }
 
     const payload = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
+      content?: { type: string; text: string }[];
     };
-    const content = payload.choices?.[0]?.message?.content;
+    const content = payload.content?.[0]?.text;
 
     if (!content) {
-      throw new Error("OpenAI trust response was empty");
+      throw new Error("Claude trust response was empty");
     }
 
-    return normalizeAiTrustEvaluation(JSON.parse(content));
+    return normalizeAiTrustEvaluation(JSON.parse(stripMarkdownJson(content)));
   } catch (error) {
     console.error("AI trust evaluation failed", {
       serviceTitle: signals.profile.serviceTitle,
@@ -320,6 +318,10 @@ function normalizeStringList(value: unknown, fallback: string[]) {
     .filter(Boolean);
 
   return items.length > 0 ? items : fallback;
+}
+
+function stripMarkdownJson(text: string) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 }
 
 function dedupeList(values: string[]) {

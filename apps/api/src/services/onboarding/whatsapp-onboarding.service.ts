@@ -261,6 +261,47 @@ async function handleConversationalOnboardingStep(
   const db = getDb();
   const onboardingData = normalizeData(userWithContact.user.onboardingData);
   const currentStep = onboardingData.currentStep as ConversationalOnboardingStep;
+
+  // BVN already on file means a previous Squad attempt failed for a non-BVN reason.
+  // Retry Squad directly; only use the new value if the user sends a fresh 11-digit BVN.
+  if (currentStep === "bvn" && onboardingData.transient.bvn) {
+    const isNewBvn = /^\d{11}$/.test(message.body.trim());
+    const dataToUse = isNewBvn
+      ? recordStepAnswer({ data: onboardingData, step: "bvn", answer: message.body })
+      : onboardingData;
+
+    const completionResult = await completeOnboarding({
+      userWithContact,
+      onboardingData: dataToUse,
+      from: message.from,
+    });
+
+    await db
+      .update(users)
+      .set({
+        onboardingStage: completionResult.completed ? "completed" : "profile_pending",
+        onboardingData: completionResult.completed
+          ? stripTransientOnboardingData(dataToUse)
+          : { ...dataToUse, currentStep: completionResult.retryStep },
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userWithContact.user.id));
+
+    await sendWhatsAppMessage({ to: message.from, body: completionResult.message });
+
+    if (completionResult.completed && userWithContact.user.accountType === "worker") {
+      await sendWorkerWelcomeImage({ to: message.from });
+      await sendWorkerProfileStartInvite({ to: message.from });
+    }
+
+    if (completionResult.completed && userWithContact.user.accountType === "employer") {
+      await sendEmployerWelcomeImage({ to: message.from });
+      await sendEmployerHomeMenu({ to: message.from });
+    }
+
+    return;
+  }
+
   const validationError = isValidStepAnswer({
     data: onboardingData,
     step: currentStep,
@@ -407,8 +448,12 @@ async function completeOnboarding(params: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const retryStep = getRetryStepForSquadError(message);
     const failureReason = getSquadFailureReason(error);
+    const retryStep = failureReason === "network" ? "bvn" : getRetryStepForSquadError(message);
+    const introMessage =
+      failureReason === "network"
+        ? "There was a connection issue creating your virtual account."
+        : "I couldn't finish creating your virtual account yet.";
 
     logSquadVirtualAccountError({
       error,
@@ -420,12 +465,7 @@ async function completeOnboarding(params: {
     return {
       completed: false,
       retryStep,
-      message:
-        "I couldn't finish creating your virtual account yet.\n\n" +
-        getRetryMessageForStep({
-          step: retryStep,
-          failureReason,
-        }),
+      message: `${introMessage}\n\n${getRetryMessageForStep({ step: retryStep, failureReason })}`,
     };
   }
   const customerIdentifier = requireValue(
@@ -502,7 +542,7 @@ function getOnboardingCompletionMessage(params: {
   const baseMessage =
     "Your Zaa account is ready.\n\n" +
     `Virtual account: ${params.virtualAccountNumber}\n` +
-    `Bank code: ${params.bankCode ?? "pending"}\n\n`;
+    `Bank: Guaranty Trust Bank (GTBank)\n\n`;
 
   if (params.accountType === "employer") {
     return baseMessage + "You can now post work requests and manage wallet payments.";
@@ -579,9 +619,13 @@ function createFallbackEmail(userId: string) {
   return env.onboarding.defaultEmail ?? `user-${userId.replaceAll("-", "")}@example.com`;
 }
 
-type SquadFailureReason = "bvn_already_registered" | "email" | "bvn" | "unknown";
+type SquadFailureReason = "bvn_already_registered" | "email" | "bvn" | "network" | "unknown";
 
 function getSquadFailureReason(error: unknown): SquadFailureReason {
+  if (error instanceof TypeError && error.message.toLowerCase().includes("fetch failed")) {
+    return "network";
+  }
+
   const normalized = getSquadErrorText(error);
 
   if (
@@ -624,6 +668,10 @@ function getRetryMessageForStep(params: {
   step: ConversationalOnboardingStep;
   failureReason: SquadFailureReason;
 }) {
+  if (params.failureReason === "network") {
+    return "This was a connection issue on our end, not a problem with your details.\n\nReply with anything to try again, or send a new 11-digit BVN if you want to use a different one.";
+  }
+
   if (params.failureReason === "bvn_already_registered") {
     return (
       "This BVN already appears to be linked to a virtual account.\n\n" +

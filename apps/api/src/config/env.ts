@@ -66,7 +66,16 @@ export const env = {
     defaultEmail: process.env.DEFAULT_ONBOARDING_EMAIL,
   },
   ai: {
-    openaiApiKey: process.env.OPENAI_API_KEY,
+    // Claude (active)
+    claudeApiKey: process.env.CLAUDE_API_KEY,
+    claudeModel: process.env.CLAUDE_MODEL ?? "claude-haiku-4-5-20251001",
+    // OpenAI (disabled — kept for reference)
+    openaiApiKey: undefined as string | undefined,
     openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+    apiKey: process.env.CLOUDINARY_API_KEY ?? "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
   },
 };

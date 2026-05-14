@@ -19,7 +19,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "lightningcss"
+      "lightningcss",
+      "sharp",
+      "@img/sharp-darwin-arm64",
+      "@img/sharp-darwin-x64"
     ]
   }
 }

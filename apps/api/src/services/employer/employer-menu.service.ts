@@ -9,6 +9,10 @@ import {
 } from "../../db/schema.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
+import {
+  getDraftWorkRequest,
+  handleWorkRequestMessage,
+} from "./employer-work-request-flow.service.js";
 
 type HandleEmployerMenuMessageParams = {
   user: typeof users.$inferSelect;
@@ -20,6 +24,12 @@ export async function handleEmployerMenuMessage(
 ) {
   const command = normalizeCommand(params.message.body);
 
+  const activeDraft = await getDraftWorkRequest(params.user.id);
+  if (activeDraft) {
+    await handleWorkRequestMessage({ user: params.user, message: params.message });
+    return;
+  }
+
   if (isMenuCommand(command)) {
     await sendEmployerHomeMenu({
       to: params.message.from,
@@ -27,10 +37,8 @@ export async function handleEmployerMenuMessage(
     return;
   }
 
-  if (["1", "post", "post work", "post work request", "create job", "create request"].includes(command)) {
-    await sendPostWorkRequestIntro({
-      to: params.message.from,
-    });
+  if (isPostWorkRequestIntent(command)) {
+    await handleWorkRequestMessage({ user: params.user, message: params.message });
     return;
   }
 
@@ -121,20 +129,6 @@ export async function sendEmployerHomeMenu(params: { to: string }) {
   });
 }
 
-async function sendPostWorkRequestIntro(params: { to: string }) {
-  await sendWhatsAppMessage({
-    to: params.to,
-    body:
-      "Post a Work Request helps you find talents, service providers, and traders on Zaa.\n\n" +
-      "Next, I will collect:\n" +
-      "- what service or talent you need\n" +
-      "- location\n" +
-      "- budget\n" +
-      "- urgency/date\n" +
-      "- work description\n\n" +
-      "This request flow is the next piece we will activate.",
-  });
-}
 
 async function sendWalletMenu(params: { to: string }) {
   await sendWhatsAppMessage({
@@ -190,7 +184,7 @@ async function sendFundingInstructions(params: {
     body:
       "Fund your Zaa wallet by transferring to your virtual account:\n\n" +
       `Account number: ${virtualAccount.virtualAccountNumber}\n` +
-      `Bank code: ${virtualAccount.bankCode ?? "pending"}\n\n` +
+      `Bank: Guaranty Trust Bank (GTBank)\n\n` +
       "Once payment is confirmed, I will notify you here.",
   });
 }
@@ -233,6 +227,25 @@ function normalizeCommand(value: string) {
 
 function isMenuCommand(command: string) {
   return ["", "hi", "hello", "hey", "menu", "home", "help", "start"].includes(command);
+}
+
+function isPostWorkRequestIntent(command: string) {
+  const exactCommands = new Set([
+    "1", "post", "post work", "post work request",
+    "create job", "create request", "new request", "new job",
+  ]);
+
+  if (exactCommands.has(command)) return true;
+
+  const patterns = [
+    /\b(post|create|publish|add)\b.*(job|request|work|task)/,
+    /\b(need|want|looking for|find me|get me)\b.*(worker|help|someone|person|staff|hand)/,
+    /\bi need\b/,
+    /\bi want to hire\b/,
+    /\b(hire|employ|recruit)\b/,
+  ];
+
+  return patterns.some((p) => p.test(command));
 }
 
 function formatNaira(amountInKobo: number) {

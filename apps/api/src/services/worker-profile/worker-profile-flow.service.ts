@@ -8,6 +8,7 @@ import {
   type users,
 } from "../../db/schema.js";
 import { evaluateWorkerTrust } from "../trust/worker-trust.service.js";
+import { handleWorkerMenuMessage } from "../worker/worker-menu.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 import {
@@ -100,10 +101,7 @@ export async function handleWorkerProfileMessage(
   }
 
   if (profile.profileStatus === "completed") {
-    await sendCompletedProfileMessage({
-      to: params.message.from,
-      profile,
-    });
+    await handleWorkerMenuMessage({ user: params.user, message: params.message });
     return;
   }
 
@@ -770,21 +768,6 @@ function getHelpMessage(
   return "Reply PROFILE to view or restart your work profile.";
 }
 
-async function sendCompletedProfileMessage(params: {
-  to: string;
-  profile: typeof workerProfiles.$inferSelect;
-}) {
-  await sendWhatsAppMessage({
-    to: params.to,
-    body:
-      "Your work profile is ready.\n\n" +
-      `Service: ${params.profile.serviceTitle ?? params.profile.occupation ?? "Not set"}\n` +
-      `Location: ${params.profile.location ?? "Not set"}\n` +
-      `Trust score: ${params.profile.trustScore}/100\n\n` +
-      "I'll use this to match you with suitable jobs and customer requests.",
-  });
-}
-
 function envLabel() {
-  return env.ai.openaiApiKey ? "openai" : "fallback";
+  return env.ai.claudeApiKey ? "claude" : "fallback";
 }
