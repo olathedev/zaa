@@ -75,9 +75,10 @@ async function sendJobAlertToWorker(params: {
   jobCardImageUrl: string;
 }) {
   try {
+    const db = getDb();
+
     // Store the work request ID on the worker profile so we know
     // which job they're responding to when they tap Apply.
-    const db = getDb();
     await db
       .update(workerProfiles)
       .set({
@@ -108,7 +109,7 @@ async function sendJobAlertToWorker(params: {
     } else {
       await sendWhatsAppMessage({
         to: params.phoneNumber,
-        body: buildFallbackAlertMessage(params.workRequest),
+        body: buildAlertMessage(params.workRequest),
       });
     }
   } catch (error) {
@@ -120,7 +121,7 @@ async function sendJobAlertToWorker(params: {
   }
 }
 
-function buildFallbackAlertMessage(workRequest: typeof workRequests.$inferSelect): string {
+function buildAlertMessage(workRequest: typeof workRequests.$inferSelect): string {
   return (
     "New job request near you.\n\n" +
     `Service: ${workRequest.serviceType ?? "Not specified"}\n` +

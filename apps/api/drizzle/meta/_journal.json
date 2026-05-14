@@ -57,6 +57,27 @@
       "when": 1778575003112,
       "tag": "0007_breezy_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778794401287,
+      "tag": "0008_oval_stryfe",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778797709087,
+      "tag": "0009_true_morlun",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778798090686,
+      "tag": "0010_busy_bloodscream",
+      "breakpoints": true
     }
   ]
 }

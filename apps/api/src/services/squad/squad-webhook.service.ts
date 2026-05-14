@@ -4,11 +4,13 @@ import { eq, or, sql } from "drizzle-orm";
 import { env } from "../../config/env.js";
 import { getDb } from "../../db/client.js";
 import {
+  jobEscrows,
   paymentTransactions,
   virtualAccounts,
   walletBalances,
   whatsappContacts,
 } from "../../db/schema.js";
+import { releaseEscrowAndShareContacts } from "../employer/employer-escrow.service.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 
 type SquadWebhookPayload = Record<string, unknown>;
@@ -37,23 +39,7 @@ export function verifySquadWebhookSignature(params: {
     throw new Error("SQUAD_SECRET_KEY is required to verify Squad webhooks");
   }
 
-  if (params.squadSignature) {
-    const payment = normalizeSquadPayment(params.payload);
-    const signatureBody = [
-      payment.transactionReference,
-      payment.virtualAccountNumber,
-      payment.currency,
-      payment.principalAmount,
-      payment.settledAmount,
-      payment.customerIdentifier,
-    ].join("|");
-
-    return signaturesMatch(
-      createHmac("sha512", env.squad.secretKey).update(signatureBody).digest("hex"),
-      params.squadSignature,
-    );
-  }
-
+  // DVA webhooks use raw-body HMAC; regular payments use field-based signature
   if (params.encryptedBody && params.rawBody) {
     return signaturesMatch(
       createHmac("sha512", env.squad.secretKey).update(params.rawBody).digest("hex"),
@@ -61,11 +47,74 @@ export function verifySquadWebhookSignature(params: {
     );
   }
 
+  if (params.squadSignature) {
+    try {
+      const payment = normalizeSquadPayment(params.payload);
+      const signatureBody = [
+        payment.transactionReference,
+        payment.virtualAccountNumber,
+        payment.currency,
+        payment.principalAmount,
+        payment.settledAmount,
+        payment.customerIdentifier,
+      ].join("|");
+
+      return signaturesMatch(
+        createHmac("sha512", env.squad.secretKey).update(signatureBody).digest("hex"),
+        params.squadSignature,
+      );
+    } catch {
+      // DVA payload may be missing fields required for field-based signature — fall through
+      return false;
+    }
+  }
+
   return false;
 }
 
 export async function processSquadPaymentWebhook(payload: SquadWebhookPayload) {
   const db = getDb();
+
+  // Extract transaction ref from raw payload first — DVA webhooks may not have
+  // customer_identifier, so we must check for escrow BEFORE calling normalizeSquadPayment.
+  const rawRef = extractTransactionRef(payload);
+  const rawStatus = extractStatus(payload);
+
+  if (rawRef) {
+    const escrow = await db.query.jobEscrows.findFirst({
+      where: eq(jobEscrows.transactionRef, rawRef),
+    });
+
+    if (escrow) {
+      if (escrow.status !== "pending_payment") {
+        return {
+          credited: false,
+          duplicate: true,
+          transactionReference: rawRef,
+          message: "Escrow already processed",
+        };
+      }
+
+      if (!isSuccessfulPaymentStatus(rawStatus ?? "")) {
+        return {
+          credited: false,
+          duplicate: false,
+          transactionReference: rawRef,
+          message: "Escrow payment status is not successful",
+        };
+      }
+
+      await releaseEscrowAndShareContacts({ escrowId: escrow.id, squadTransactionRef: rawRef });
+      return {
+        credited: true,
+        duplicate: false,
+        transactionReference: rawRef,
+        message: "Escrow funded — contacts shared",
+      };
+    }
+  }
+
+  // Not an escrow payment — process as a regular wallet credit
   const payment = normalizeSquadPayment(payload);
 
   if (!isSuccessfulPaymentStatus(payment.status)) {
@@ -243,6 +292,22 @@ function signaturesMatch(expected: string, received: string) {
   }
 
   return timingSafeEqual(expectedBuffer, receivedBuffer);
+}
+
+function extractTransactionRef(payload: SquadWebhookPayload): string | undefined {
+  const data = getRecord(payload.data) ?? payload;
+  return getString(
+    data.transaction_reference,
+    data.transaction_ref,
+    data.transactionRef,
+    payload.transaction_reference,
+    payload.transaction_ref,
+  );
+}
+
+function extractStatus(payload: SquadWebhookPayload): string | undefined {
+  const data = getRecord(payload.data) ?? payload;
+  return getString(data.status, data.transaction_status, payload.status);
 }
 
 function isSuccessfulPaymentStatus(status: string) {

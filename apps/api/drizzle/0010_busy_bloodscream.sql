@@ -1,0 +1,1 @@
+ALTER TYPE "public"."work_request_status" ADD VALUE 'escrow_pending' BEFORE 'in_progress';

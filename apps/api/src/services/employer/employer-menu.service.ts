@@ -2,16 +2,23 @@ import { desc, eq } from "drizzle-orm";
 
 import { getDb } from "../../db/client.js";
 import {
+  jobApplications,
   paymentTransactions,
   users,
   virtualAccounts,
   walletBalances,
+  whatsappContacts,
   workRequests,
 } from "../../db/schema.js";
 import { generateAndUploadJobCard } from "../job-card/job-card.service.js";
 import { notifyMatchedWorkers } from "../worker/worker-notification.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
+import {
+  getEscrowState,
+  handleEscrowAccept,
+  handleEscrowAmountInput,
+} from "./employer-escrow.service.js";
 import {
   getDraftWorkRequest,
   handleWorkRequestMessage,
@@ -26,6 +33,18 @@ export async function handleEmployerMenuMessage(
   params: HandleEmployerMenuMessageParams,
 ) {
   const command = normalizeCommand(params.message.body);
+
+  // Escrow amount input takes highest priority
+  const escrowState = getEscrowState(params.user);
+  if (escrowState.stage === "awaiting_amount") {
+    await handleEscrowAmountInput({
+      employer: params.user,
+      applicationId: escrowState.applicationId,
+      amountText: params.message.body,
+      to: params.message.from,
+    });
+    return;
+  }
 
   const activeDraft = await getDraftWorkRequest(params.user.id);
   if (activeDraft) {
@@ -89,6 +108,22 @@ export async function handleEmployerMenuMessage(
   if (["fund", "fund wallet", "deposit"].includes(command)) {
     await sendFundingInstructions({
       userId: params.user.id,
+      to: params.message.from,
+    });
+    return;
+  }
+
+  if (["accept", "accept ✅"].includes(command)) {
+    await handleEscrowAccept({
+      employer: params.user,
+      to: params.message.from,
+    });
+    return;
+  }
+
+  if (["decline", "decline ❌"].includes(command)) {
+    await handleDecline({
+      employer: params.user,
       to: params.message.from,
     });
     return;
@@ -299,6 +334,80 @@ async function retriggerWorkerNotification(params: { userId: string; to: string 
     await sendWhatsAppMessage({
       to: params.to,
       body: `Notification failed: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+    });
+  }
+}
+
+async function handleDecline(params: {
+  employer: typeof users.$inferSelect;
+  to: string;
+}) {
+  const data = params.employer.onboardingData;
+  const pendingApplicationId =
+    data && typeof data === "object" && "pendingApplicationId" in data
+      ? (data.pendingApplicationId as string | null)
+      : null;
+
+  if (!pendingApplicationId) {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "No pending application found.",
+    });
+    return;
+  }
+
+  const db = getDb();
+  const application = await db.query.jobApplications.findFirst({
+    where: eq(jobApplications.id, pendingApplicationId),
+  });
+
+  if (!application || application.status !== "pending") {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "That application has already been responded to or no longer exists.",
+    });
+    return;
+  }
+
+  const [workRequest, workerUser] = await Promise.all([
+    db.query.workRequests.findFirst({ where: eq(workRequests.id, application.workRequestId) }),
+    db.query.users.findFirst({ where: eq(users.id, application.workerId) }),
+  ]);
+
+  await db
+    .update(jobApplications)
+    .set({ status: "declined", updatedAt: new Date() })
+    .where(eq(jobApplications.id, application.id));
+
+  await db
+    .update(users)
+    .set({
+      onboardingData: {
+        ...((params.employer.onboardingData as object) ?? {}),
+        pendingApplicationId: null,
+        awaitingEscrowAmount: false,
+        escrowApplicationId: null,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, params.employer.id));
+
+  const workerName = workerUser?.displayName ?? "The worker";
+  await sendWhatsAppMessage({
+    to: params.to,
+    body: `You've declined ${workerName}'s application. The job is still open for other applicants.`,
+  });
+
+  const workerContact = await db.query.whatsappContacts.findFirst({
+    where: eq(whatsappContacts.userId, application.workerId),
+  });
+
+  if (workerContact) {
+    await sendWhatsAppMessage({
+      to: workerContact.phoneNumber,
+      body:
+        "The employer has filled this position.\n\n" +
+        "Don't worry — I'll keep sending you new opportunities as they come in.",
     });
   }
 }

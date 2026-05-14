@@ -1,9 +1,17 @@
 import { eq } from "drizzle-orm";
 
 import { getDb } from "../../db/client.js";
-import { walletBalances, workRequests, workerProfiles, type users } from "../../db/schema.js";
-import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
+import {
+  jobApplications,
+  users,
+  walletBalances,
+  whatsappContacts,
+  workRequests,
+  workerProfiles,
+} from "../../db/schema.js";
+import { generateWorkerAnalysis } from "../ai/zaa-analysis.service.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
+import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 
 type HandleWorkerMenuMessageParams = {
   user: typeof users.$inferSelect;
@@ -79,9 +87,11 @@ export async function sendWorkerHomeMenu(params: { to: string }) {
 
 async function handleApply(params: { userId: string; to: string }) {
   const db = getDb();
-  const profile = await db.query.workerProfiles.findFirst({
-    where: eq(workerProfiles.userId, params.userId),
-  });
+
+  const [profile, workerUser] = await Promise.all([
+    db.query.workerProfiles.findFirst({ where: eq(workerProfiles.userId, params.userId) }),
+    db.query.users.findFirst({ where: eq(users.id, params.userId) }),
+  ]);
 
   const pendingJobAlertId =
     profile?.metadata &&
@@ -90,7 +100,7 @@ async function handleApply(params: { userId: string; to: string }) {
       ? (profile.metadata.pendingJobAlertId as string)
       : null;
 
-  if (!pendingJobAlertId) {
+  if (!pendingJobAlertId || !profile) {
     await sendWhatsAppMessage({
       to: params.to,
       body: "No active job alert found. I'll notify you when a new one comes in.",
@@ -110,11 +120,22 @@ async function handleApply(params: { userId: string; to: string }) {
     return;
   }
 
-  // Clear the pending alert so they don't accidentally re-apply
+  // Create application record
+  const [application] = await db
+    .insert(jobApplications)
+    .values({
+      workRequestId: job.id,
+      workerId: params.userId,
+      workerProfileId: profile.id,
+      status: "pending",
+    })
+    .returning();
+
+  // Clear pending alert from worker profile
   await db
     .update(workerProfiles)
     .set({
-      metadata: { ...((profile?.metadata as object) ?? {}), pendingJobAlertId: null },
+      metadata: { ...((profile.metadata as object) ?? {}), pendingJobAlertId: null },
       updatedAt: new Date(),
     })
     .where(eq(workerProfiles.userId, params.userId));
@@ -125,10 +146,79 @@ async function handleApply(params: { userId: string; to: string }) {
       "Your application has been sent.\n\n" +
       `Service: ${job.serviceType ?? "Not specified"}\n` +
       `Location: ${job.location ?? "Not specified"}\n\n` +
-      "The employer will be notified and will reach out if you're a good fit.",
+      "The employer will be notified. I'll let you know their decision.",
   });
 
-  // TODO: notify the employer that a worker applied
+  // Notify employer in the background
+  notifyEmployerOfApplication({
+    application,
+    job,
+    profile,
+    workerUser: workerUser ?? null,
+  }).catch((error) => {
+    console.error("Employer application notification failed", {
+      applicationId: application.id,
+      error: error instanceof Error ? error.message : JSON.stringify(error),
+    });
+  });
+}
+
+async function notifyEmployerOfApplication(params: {
+  application: typeof jobApplications.$inferSelect;
+  job: typeof workRequests.$inferSelect;
+  profile: typeof workerProfiles.$inferSelect;
+  workerUser: typeof users.$inferSelect | null;
+}) {
+  const db = getDb();
+
+  const [employerContact, employerUser] = await Promise.all([
+    db.query.whatsappContacts.findFirst({
+      where: eq(whatsappContacts.userId, params.job.userId),
+    }),
+    db.query.users.findFirst({
+      where: eq(users.id, params.job.userId),
+    }),
+  ]);
+
+  if (!employerContact || !employerUser) return;
+
+  const workerName = params.workerUser?.displayName ?? "A worker";
+  const analysis = await generateWorkerAnalysis({
+    workerName,
+    serviceTitle: params.profile.serviceTitle ?? params.profile.occupation ?? "Not set",
+    skills: params.profile.skills,
+    experienceLevel: params.profile.experienceLevel ?? "unknown",
+    location: params.profile.location ?? "Not set",
+    trustScore: params.profile.trustScore,
+    assessmentScore: params.profile.assessmentScore ?? 0,
+  });
+
+  // Store the pending application ID on the employer so we know what
+  // they're responding to when they type ACCEPT or DECLINE
+  await db
+    .update(users)
+    .set({
+      onboardingData: {
+        ...((employerUser.onboardingData as object) ?? {}),
+        pendingApplicationId: params.application.id,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, params.job.userId));
+
+  await sendWhatsAppMessage({
+    to: employerContact.phoneNumber,
+    body:
+      `New Application!\n\n` +
+      `${workerName} applied for your ${params.job.serviceType ?? "job"}.\n\n` +
+      `Service: ${params.profile.serviceTitle ?? params.profile.occupation ?? "Not set"}\n` +
+      `Location: ${params.profile.location ?? "Not set"}\n` +
+      `Experience: ${params.profile.experienceLevel ?? "Not set"}\n` +
+      `Trust Score: ${params.profile.trustScore}/100\n` +
+      `Skill Score: ${params.profile.assessmentScore ?? 0}%\n\n` +
+      `Zaa says: ${analysis}\n\n` +
+      "Reply ACCEPT to hire them, or DECLINE to pass.",
+  });
 }
 
 async function handleSkip(params: { userId: string; to: string }) {

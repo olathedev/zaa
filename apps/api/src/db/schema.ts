@@ -260,6 +260,7 @@ export const messages = pgTable(
 export const workRequestStatus = pgEnum("work_request_status", [
   "draft",
   "open",
+  "escrow_pending",
   "in_progress",
   "completed",
   "cancelled",
@@ -283,6 +284,77 @@ export const workRequests = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("work_requests_user_id_idx").on(table.userId)],
+);
+
+export const jobApplicationStatus = pgEnum("job_application_status", [
+  "pending",
+  "accepted",
+  "declined",
+]);
+
+export const jobApplications = pgTable(
+  "job_applications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workRequestId: uuid("work_request_id")
+      .notNull()
+      .references(() => workRequests.id, { onDelete: "cascade" }),
+    workerId: uuid("worker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workerProfileId: uuid("worker_profile_id")
+      .notNull()
+      .references(() => workerProfiles.id, { onDelete: "cascade" }),
+    status: jobApplicationStatus("status").default("pending").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("job_applications_work_request_id_idx").on(table.workRequestId),
+    index("job_applications_worker_id_idx").on(table.workerId),
+  ],
+);
+
+export const escrowStatus = pgEnum("escrow_status", [
+  "pending_payment",
+  "funded",
+  "released",
+  "refunded",
+  "expired",
+]);
+
+export const jobEscrows = pgTable(
+  "job_escrows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobApplicationId: uuid("job_application_id")
+      .notNull()
+      .references(() => jobApplications.id, { onDelete: "cascade" }),
+    workRequestId: uuid("work_request_id")
+      .notNull()
+      .references(() => workRequests.id, { onDelete: "cascade" }),
+    employerId: uuid("employer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workerId: uuid("worker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    amount: integer("amount").notNull(),
+    status: escrowStatus("status").default("pending_payment").notNull(),
+    transactionRef: text("transaction_ref").notNull().unique(),
+    dvaAccountNumber: text("dva_account_number"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    squadTransactionReference: text("squad_transaction_reference"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("job_escrows_job_application_id_idx").on(table.jobApplicationId),
+    index("job_escrows_employer_id_idx").on(table.employerId),
+    index("job_escrows_worker_id_idx").on(table.workerId),
+    index("job_escrows_transaction_ref_idx").on(table.transactionRef),
+  ],
 );
 
 export const opportunities = pgTable("opportunities", {
