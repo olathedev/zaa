@@ -104,7 +104,9 @@ async function uploadToCloudinary(buffer: Buffer): Promise<string> {
         },
         (error, result) => {
           if (error || !result) {
-            return reject(error ?? new Error("Cloudinary upload returned no result"));
+            return reject(
+              new Error(`Cloudinary upload failed: ${JSON.stringify(error ?? "no result")}`),
+            );
           }
           resolve(result.secure_url);
         },

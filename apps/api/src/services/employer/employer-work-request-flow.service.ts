@@ -189,7 +189,7 @@ async function handleConfirmStep(params: {
   notifyWorkersInBackground({ workRequest: posted }).catch((error) => {
     console.error("Background worker notification failed", {
       workRequestId: posted.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : JSON.stringify(error),
     });
   });
 }
@@ -304,12 +304,20 @@ function normalizeFlowData(
 async function notifyWorkersInBackground(params: {
   workRequest: typeof workRequests.$inferSelect;
 }) {
+  console.log("Worker notification: starting background job", {
+    workRequestId: params.workRequest.id,
+    serviceType: params.workRequest.serviceType,
+    location: params.workRequest.location,
+  });
+
   const jobCardImageUrl = await generateAndUploadJobCard({
     serviceType: params.workRequest.serviceType ?? "Job",
     location: params.workRequest.location ?? "Nigeria",
     budget: params.workRequest.budget ?? "Negotiable",
     preferredDate: params.workRequest.preferredDate ?? "Flexible",
   });
+
+  console.log("Worker notification: job card uploaded", { jobCardImageUrl });
 
   await notifyMatchedWorkers({
     workRequest: params.workRequest,

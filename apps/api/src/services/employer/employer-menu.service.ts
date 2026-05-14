@@ -6,7 +6,10 @@ import {
   users,
   virtualAccounts,
   walletBalances,
+  workRequests,
 } from "../../db/schema.js";
+import { generateAndUploadJobCard } from "../job-card/job-card.service.js";
+import { notifyMatchedWorkers } from "../worker/worker-notification.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 import {
@@ -88,6 +91,11 @@ export async function handleEmployerMenuMessage(
       userId: params.user.id,
       to: params.message.from,
     });
+    return;
+  }
+
+  if (command === "notify") {
+    await retriggerWorkerNotification({ userId: params.user.id, to: params.message.from });
     return;
   }
 
@@ -246,6 +254,53 @@ function isPostWorkRequestIntent(command: string) {
   ];
 
   return patterns.some((p) => p.test(command));
+}
+
+async function retriggerWorkerNotification(params: { userId: string; to: string }) {
+  const db = getDb();
+
+  const latest = await db.query.workRequests.findFirst({
+    where: eq(workRequests.userId, params.userId),
+    orderBy: [desc(workRequests.createdAt)],
+  });
+
+  if (!latest || latest.status !== "open") {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "No open work request found to notify workers for.",
+    });
+    return;
+  }
+
+  await sendWhatsAppMessage({
+    to: params.to,
+    body: `Retrying worker notifications for: ${latest.serviceType ?? "job"} in ${latest.location ?? "unknown"}...`,
+  });
+
+  try {
+    const jobCardImageUrl = await generateAndUploadJobCard({
+      serviceType: latest.serviceType ?? "Job",
+      location: latest.location ?? "Nigeria",
+      budget: latest.budget ?? "Negotiable",
+      preferredDate: latest.preferredDate ?? "Flexible",
+    });
+
+    await notifyMatchedWorkers({ workRequest: latest, jobCardImageUrl });
+
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "Worker notifications sent.",
+    });
+  } catch (error) {
+    console.error("NOTIFY command failed", {
+      error: error instanceof Error ? error.message : JSON.stringify(error),
+    });
+
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: `Notification failed: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+    });
+  }
 }
 
 function formatNaira(amountInKobo: number) {

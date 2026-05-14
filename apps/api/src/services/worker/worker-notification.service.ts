@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm";
 
+import { env } from "../../config/env.js";
 import { getDb } from "../../db/client.js";
 import { whatsappContacts, workerProfiles, type workRequests } from "../../db/schema.js";
 import {
+  sendWhatsAppContentMessage,
   sendWhatsAppMediaMessage,
   sendWhatsAppMessage,
 } from "../whatsapp/twilio-whatsapp.service.js";
@@ -13,6 +15,12 @@ export async function notifyMatchedWorkers(params: {
 }) {
   const matched = await findMatchedWorkers(params.workRequest);
 
+  console.log("Worker notification: matched workers", {
+    workRequestId: params.workRequest.id,
+    matchedCount: matched.length,
+    phones: matched.map((w) => w.phoneNumber),
+  });
+
   if (matched.length === 0) {
     return;
   }
@@ -20,6 +28,7 @@ export async function notifyMatchedWorkers(params: {
   await Promise.allSettled(
     matched.map((worker) =>
       sendJobAlertToWorker({
+        workerProfileId: worker.profile.id,
         phoneNumber: worker.phoneNumber,
         workRequest: params.workRequest,
         jobCardImageUrl: params.jobCardImageUrl,
@@ -35,22 +44,14 @@ async function findMatchedWorkers(workRequest: typeof workRequests.$inferSelect)
     where: eq(workerProfiles.profileStatus, "completed"),
   });
 
-  const serviceKeywords = extractKeywords(workRequest.serviceType ?? "");
-  const requestState = extractState(workRequest.location ?? "");
-
-  const matched = completedProfiles.filter((profile) => {
-    const serviceMatch = matchesService(
-      serviceKeywords,
-      profile.serviceTitle ?? profile.occupation ?? "",
-      profile.skills,
-    );
-
-    const locationMatch = requestState
-      ? matchesState(requestState, profile.location ?? "")
-      : true;
-
-    return serviceMatch && locationMatch;
+  console.log("Worker notification: searching for matches", {
+    serviceType: workRequest.serviceType,
+    location: workRequest.location,
+    completedProfilesCount: completedProfiles.length,
   });
+
+  // TODO: replace with AI-based matching
+  const matched = completedProfiles;
 
   if (matched.length === 0) {
     return [];
@@ -68,62 +69,64 @@ async function findMatchedWorkers(workRequest: typeof workRequests.$inferSelect)
 }
 
 async function sendJobAlertToWorker(params: {
+  workerProfileId: string;
   phoneNumber: string;
   workRequest: typeof workRequests.$inferSelect;
   jobCardImageUrl: string;
 }) {
   try {
+    // Store the work request ID on the worker profile so we know
+    // which job they're responding to when they tap Apply.
+    const db = getDb();
+    await db
+      .update(workerProfiles)
+      .set({
+        metadata: { pendingJobAlertId: params.workRequest.id },
+        updatedAt: new Date(),
+      })
+      .where(eq(workerProfiles.id, params.workerProfileId));
+
+    // Send the job card image first
     await sendWhatsAppMediaMessage({
       to: params.phoneNumber,
       mediaUrl: params.jobCardImageUrl,
     });
 
-    await sendWhatsAppMessage({
-      to: params.phoneNumber,
-      body: buildAlertMessage(params.workRequest),
-    });
+    // Send quick reply buttons if template SID is configured,
+    // otherwise fall back to plain text
+    if (env.twilio.jobAlertContentSid) {
+      await sendWhatsAppContentMessage({
+        to: params.phoneNumber,
+        contentSid: env.twilio.jobAlertContentSid,
+        contentVariables: {
+          "1": params.workRequest.serviceType ?? "Job",
+          "2": params.workRequest.location ?? "Nigeria",
+          "3": params.workRequest.budget ?? "Negotiable",
+          "4": params.workRequest.preferredDate ?? "Flexible",
+        },
+      });
+    } else {
+      await sendWhatsAppMessage({
+        to: params.phoneNumber,
+        body: buildFallbackAlertMessage(params.workRequest),
+      });
+    }
   } catch (error) {
     console.error("Failed to send job alert to worker", {
       phoneNumber: params.phoneNumber,
       workRequestId: params.workRequest.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : JSON.stringify(error),
     });
   }
 }
 
-function buildAlertMessage(workRequest: typeof workRequests.$inferSelect): string {
+function buildFallbackAlertMessage(workRequest: typeof workRequests.$inferSelect): string {
   return (
     "New job request near you.\n\n" +
     `Service: ${workRequest.serviceType ?? "Not specified"}\n` +
     `Location: ${workRequest.location ?? "Not specified"}\n` +
     `Budget: ${workRequest.budget ?? "Not specified"}\n` +
     `Date: ${workRequest.preferredDate ?? "Not specified"}\n\n` +
-    "Reply INTERESTED to apply."
+    "Reply APPLY to apply, or SKIP to dismiss."
   );
-}
-
-function extractKeywords(value: string): string[] {
-  return value
-    .toLowerCase()
-    .split(/[\s,]+/)
-    .filter((word) => word.length > 2);
-}
-
-function extractState(location: string): string {
-  // "Jos, Nigeria" → "nigeria" | "Yaba, Lagos" → "lagos"
-  const parts = location.split(",").map((p) => p.trim().toLowerCase());
-  return parts[parts.length - 1] ?? "";
-}
-
-function matchesService(
-  requestKeywords: string[],
-  serviceTitle: string,
-  skills: string[],
-): boolean {
-  const workerText = [serviceTitle, ...skills].join(" ").toLowerCase();
-  return requestKeywords.some((keyword) => workerText.includes(keyword));
-}
-
-function matchesState(requestState: string, workerLocation: string): boolean {
-  return workerLocation.toLowerCase().includes(requestState);
 }

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { getDb } from "../../db/client.js";
-import { walletBalances, workerProfiles, type users } from "../../db/schema.js";
+import { walletBalances, workRequests, workerProfiles, type users } from "../../db/schema.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 
@@ -13,10 +13,20 @@ type HandleWorkerMenuMessageParams = {
 export async function handleWorkerMenuMessage(
   params: HandleWorkerMenuMessageParams,
 ) {
-  const command = normalizeCommand(params.message.body);
+  const command = normalizeCommand(params.message.buttonPayload ?? params.message.body);
 
   if (isMenuCommand(command)) {
     await sendWorkerHomeMenu({ to: params.message.from });
+    return;
+  }
+
+  if (isApplyIntent(command)) {
+    await handleApply({ userId: params.user.id, to: params.message.from });
+    return;
+  }
+
+  if (isSkipIntent(command)) {
+    await handleSkip({ userId: params.user.id, to: params.message.from });
     return;
   }
 
@@ -64,6 +74,77 @@ export async function sendWorkerHomeMenu(params: { to: string }) {
       "3. My Profile\n" +
       "4. Earnings\n\n" +
       "Reply with a number or command.",
+  });
+}
+
+async function handleApply(params: { userId: string; to: string }) {
+  const db = getDb();
+  const profile = await db.query.workerProfiles.findFirst({
+    where: eq(workerProfiles.userId, params.userId),
+  });
+
+  const pendingJobAlertId =
+    profile?.metadata &&
+    typeof profile.metadata === "object" &&
+    "pendingJobAlertId" in profile.metadata
+      ? (profile.metadata.pendingJobAlertId as string)
+      : null;
+
+  if (!pendingJobAlertId) {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "No active job alert found. I'll notify you when a new one comes in.",
+    });
+    return;
+  }
+
+  const job = await db.query.workRequests.findFirst({
+    where: eq(workRequests.id, pendingJobAlertId),
+  });
+
+  if (!job || job.status !== "open") {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "That job is no longer available.",
+    });
+    return;
+  }
+
+  // Clear the pending alert so they don't accidentally re-apply
+  await db
+    .update(workerProfiles)
+    .set({
+      metadata: { ...((profile?.metadata as object) ?? {}), pendingJobAlertId: null },
+      updatedAt: new Date(),
+    })
+    .where(eq(workerProfiles.userId, params.userId));
+
+  await sendWhatsAppMessage({
+    to: params.to,
+    body:
+      "Your application has been sent.\n\n" +
+      `Service: ${job.serviceType ?? "Not specified"}\n` +
+      `Location: ${job.location ?? "Not specified"}\n\n` +
+      "The employer will be notified and will reach out if you're a good fit.",
+  });
+
+  // TODO: notify the employer that a worker applied
+}
+
+async function handleSkip(params: { userId: string; to: string }) {
+  const db = getDb();
+
+  await db
+    .update(workerProfiles)
+    .set({
+      metadata: { pendingJobAlertId: null },
+      updatedAt: new Date(),
+    })
+    .where(eq(workerProfiles.userId, params.userId));
+
+  await sendWhatsAppMessage({
+    to: params.to,
+    body: "Got it. I'll keep sending you new opportunities as they come in.",
   });
 }
 
@@ -117,6 +198,14 @@ function normalizeCommand(value: string) {
 
 function isMenuCommand(command: string) {
   return ["", "hi", "hello", "hey", "menu", "home", "help", "start"].includes(command);
+}
+
+function isApplyIntent(command: string) {
+  return ["apply", "apply ✅", "interested", "yes"].includes(command);
+}
+
+function isSkipIntent(command: string) {
+  return ["skip", "not interested", "skip ❌", "no"].includes(command);
 }
 
 function isAvailableJobsIntent(command: string) {
