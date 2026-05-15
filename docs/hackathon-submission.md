@@ -143,7 +143,7 @@ This is Zaa's long-term financial inclusion engine. Every action a user takes on
 | Response time to job alerts | Medium |
 | Cancellation rate | Negative |
 
-The Trust Score (0–100) is computed by Claude, which evaluates the full signal set and produces:
+The Trust Score (0–100) is computed by a strong, which evaluates the full signal set and produces:
 - A numeric score
 - A risk level (low / medium / high)
 - Specific improvement tips sent to the worker
