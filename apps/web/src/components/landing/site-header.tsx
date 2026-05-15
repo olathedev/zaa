@@ -35,6 +35,8 @@ export function SiteHeader({ whatsappChatUrl }: { whatsappChatUrl: string }) {
 
         <a
           href={whatsappChatUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-lg bg-[#1d2230] px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#1769ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 lg:min-h-12 lg:px-6 lg:text-base"
         >
           <WhatsAppIcon className="size-4" />

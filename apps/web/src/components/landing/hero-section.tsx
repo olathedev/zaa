@@ -166,6 +166,8 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
 						>
 							<a
 								href={whatsappChatUrl}
+								target="_blank"
+								rel="noopener noreferrer"
 								className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#1769ff] px-6 text-base font-medium text-white transition-colors duration-150 ease-out hover:bg-[#0f56d9] motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4"
 							>
 								<WhatsAppIcon className="size-4" />

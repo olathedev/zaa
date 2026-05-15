@@ -250,6 +250,8 @@ function FeatureCard({
       <a
         data-feature-copy
         href={whatsappChatUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className={`mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-6 text-base font-medium transition-colors duration-150 ease-out motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1769ff] focus-visible:ring-offset-4 sm:w-fit ${feature.buttonClassName}`}
       >
         <WhatsAppIcon className="size-4" />
