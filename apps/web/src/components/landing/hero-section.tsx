@@ -70,8 +70,8 @@ const heroImages = {
 	},
 } satisfies Record<string, HeroImage>;
 
-const HERO_IMAGE_CHANGE_DELAY_MS = 5600;
-const HERO_IMAGE_TRANSITION_MS = 1400;
+const HERO_IMAGE_CHANGE_DELAY_MS = 6000;
+const HERO_IMAGE_TRANSITION_MS = 700;
 
 const heroImageGroups = {
 	main: [
@@ -308,17 +308,11 @@ function ImageStack({
 						width={image.width}
 						height={image.height}
 						aria-hidden={isActive ? undefined : true}
-						className="absolute inset-0 h-full w-full object-cover will-change-[opacity,transform]"
+						className="absolute inset-0 h-full w-full object-cover"
 						style={{
-							filter: isActive
-								? "saturate(1) contrast(1)"
-								: "saturate(0.92) contrast(0.96)",
 							objectPosition,
 							opacity: isActive ? imageOpacity : 0,
-							transform: isActive
-								? "translate3d(0, 0, 0) scale(1.035)"
-								: "translate3d(0, 10px, 0) scale(1.01)",
-							transition: `opacity ${HERO_IMAGE_TRANSITION_MS}ms cubic-bezier(0.4, 0, 0.2, 1), transform ${HERO_IMAGE_TRANSITION_MS + 300}ms cubic-bezier(0.4, 0, 0.2, 1), filter ${HERO_IMAGE_TRANSITION_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+							transition: `opacity ${HERO_IMAGE_TRANSITION_MS}ms ease-in-out`,
 							transitionDelay: `${transitionDelayMs}ms`,
 							zIndex: isActive ? 2 : 1,
 						}}

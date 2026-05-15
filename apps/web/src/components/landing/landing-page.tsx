@@ -6,7 +6,7 @@ import { SiteHeader } from "./site-header";
 import { SmoothScroll } from "./smooth-scroll";
 import { UseCasesSection } from "./use-cases-section";
 
-const whatsappChatUrl = "#start-chat";
+const whatsappChatUrl = "https://wa.me/14155238886?text=join%20wrapped-detail";
 
 export function LandingPage() {
 	return (
