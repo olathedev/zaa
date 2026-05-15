@@ -1,13 +1,42 @@
+import { randomUUID } from "node:crypto";
+
 import { Router } from "express";
 import { z } from "zod";
 
 import { env } from "../../config/env.js";
+import { initiateDynamicVirtualAccount } from "../../services/squad/squad-dva.service.js";
 import {
   processSquadPaymentWebhook,
   verifySquadWebhookSignature,
 } from "../../services/squad/squad-webhook.service.js";
 
 export const squadWebhookRouter = Router();
+
+// Dev-only: call Squad's initiate-dynamic-virtual-account directly — no fallback, raw response
+squadWebhookRouter.post("/test-dva", async (req, res) => {
+  if (env.nodeEnv === "production") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const body = testDvaSchema.parse(req.body);
+  const transactionRef = body.transaction_ref ?? `zaa-test-dva-${randomUUID()}`;
+  const email = body.email ?? `test-${Date.now()}@zaa.ng`;
+
+  const dva = await initiateDynamicVirtualAccount({
+    amountKobo: body.amount * 100,
+    email,
+    transactionRef,
+    durationSeconds: body.duration_seconds ?? 3600,
+  });
+
+  res.status(200).json({
+    ok: true,
+    transaction_ref: transactionRef,
+    email,
+    dva,
+  });
+});
 
 squadWebhookRouter.post("/test", async (req, res) => {
   if (env.nodeEnv === "production") {
@@ -91,6 +120,13 @@ squadWebhookRouter.post("/", async (req, res) => {
       response_description: error instanceof Error ? error.message : "Webhook rejected",
     });
   }
+});
+
+const testDvaSchema = z.object({
+  amount: z.number().positive(),
+  transaction_ref: z.string().optional(),
+  email: z.string().optional(),
+  duration_seconds: z.number().int().positive().optional(),
 });
 
 const testPaymentSchema = z.object({

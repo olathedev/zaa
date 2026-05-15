@@ -53,7 +53,7 @@ export async function initiateDynamicVirtualAccount(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        amount: params.amountKobo,
+        amount: params.amountKobo / 100,
         email: params.email,
         transaction_ref: params.transactionRef,
         duration: params.durationSeconds ?? 86400,
