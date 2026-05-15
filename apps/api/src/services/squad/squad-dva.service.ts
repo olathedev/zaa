@@ -1,17 +1,17 @@
 import { env } from "../../config/env.js";
 
 export type InitiateDvaParams = {
-  amountNaira: number;
+  amountKobo: number;
   email: string;
   transactionRef: string;
   durationSeconds?: number;
 };
 
 export type SquadDvaData = {
-  virtual_account_number: string;
+  account_number: string;
   bank: string;
   amount: number;
-  transaction_ref: string;
+  transaction_reference: string;
   expires_at?: string;
 };
 
@@ -53,10 +53,9 @@ export async function initiateDynamicVirtualAccount(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        amount: params.amountNaira,
+        amount: params.amountKobo,
         email: params.email,
         transaction_ref: params.transactionRef,
-        is_recurring: false,
         duration: params.durationSeconds ?? 86400,
       }),
     },
@@ -68,7 +67,7 @@ export async function initiateDynamicVirtualAccount(
     throw new SquadDvaError({ status: response.status, responseBody: body });
   }
 
-  if (!body.data?.virtual_account_number) {
+  if (!body.data?.account_number) {
     throw new Error(`Squad DVA response missing account number: ${JSON.stringify(body)}`);
   }
 

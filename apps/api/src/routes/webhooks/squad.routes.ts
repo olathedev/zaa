@@ -45,7 +45,7 @@ squadWebhookRouter.post("/test", async (req, res) => {
   });
 });
 
-squadWebhookRouter.post("/", async (req, res, next) => {
+squadWebhookRouter.post("/", async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     const transactionReference = getTransactionReference(payload);
@@ -94,8 +94,8 @@ squadWebhookRouter.post("/", async (req, res, next) => {
 });
 
 const testPaymentSchema = z.object({
-  customer_identifier: z.string().min(1),
-  virtual_account_number: z.string().min(1),
+  customer_identifier: z.string().default("test"),
+  virtual_account_number: z.string().default("0000000000"),
   amount: z.number().int().positive(),
   settled_amount: z.number().int().positive().optional(),
   fee: z.number().int().min(0).default(0),

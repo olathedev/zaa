@@ -12,6 +12,14 @@ import {
 import { generateWorkerAnalysis } from "../ai/zaa-analysis.service.js";
 import { sendWhatsAppMessage } from "../whatsapp/twilio-whatsapp.service.js";
 import type { NormalizedWhatsAppMessage } from "../whatsapp/twilio-whatsapp.types.js";
+import {
+  handleWorkerActiveJobs,
+  handleWorkerCancelJob,
+  handleWorkerJobSelection,
+  handleWorkerMarkComplete,
+  hasActiveJobList,
+  getManagingJobId,
+} from "./worker-active-jobs.service.js";
 
 type HandleWorkerMenuMessageParams = {
   user: typeof users.$inferSelect;
@@ -22,6 +30,33 @@ export async function handleWorkerMenuMessage(
   params: HandleWorkerMenuMessageParams,
 ) {
   const command = normalizeCommand(params.message.buttonPayload ?? params.message.body);
+  const db = getDb();
+
+  // Load profile once for state checks
+  const profile = await db.query.workerProfiles.findFirst({
+    where: eq(workerProfiles.userId, params.user.id),
+  });
+
+  // Job selection from numbered list
+  if (hasActiveJobList(profile) && /^\d+$/.test(command)) {
+    await handleWorkerJobSelection({ userId: params.user.id, to: params.message.from, input: command });
+    return;
+  }
+
+  // Job management commands (only when a job is selected)
+  if (getManagingJobId(profile)) {
+    if (isCompleteIntent(command)) {
+      await handleWorkerMarkComplete({ userId: params.user.id, to: params.message.from });
+      return;
+    }
+    if (command === "discontinue") {
+      await sendWhatsAppMessage({
+        to: params.message.from,
+        body: "The discontinue feature is coming soon.",
+      });
+      return;
+    }
+  }
 
   if (isMenuCommand(command)) {
     await sendWorkerHomeMenu({ to: params.message.from });
@@ -49,10 +84,7 @@ export async function handleWorkerMenuMessage(
   }
 
   if (isActiveJobsIntent(command)) {
-    await sendWhatsAppMessage({
-      to: params.message.from,
-      body: "You do not have any active jobs yet.",
-    });
+    await handleWorkerActiveJobs({ userId: params.user.id, to: params.message.from });
     return;
   }
 
@@ -320,6 +352,14 @@ function isEarningsIntent(command: string) {
   return [
     "4", "earnings", "my earnings", "wallet", "balance", "pay", "payment", "withdraw",
   ].includes(command);
+}
+
+function isCompleteIntent(command: string) {
+  return ["complete", "mark complete", "done", "mark done", "job done", "finished"].includes(command);
+}
+
+function isCancelJobIntent(command: string) {
+  return ["cancel", "cancel job", "withdraw"].includes(command);
 }
 
 function formatNaira(amountInKobo: number) {

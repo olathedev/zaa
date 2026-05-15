@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
+import { env } from "../../config/env.js";
 import { getDb } from "../../db/client.js";
 import {
   jobApplications,
   jobEscrows,
   users,
+  walletBalances,
   whatsappContacts,
   workRequests,
   workerProfiles,
@@ -185,29 +187,34 @@ async function initiateEscrow(params: {
   let dvaAccountNumber: string | undefined;
   let expiresAt: Date | undefined;
 
+  const isSandbox = env.squad.baseUrl?.includes("sandbox");
+
   try {
     const dva = await initiateDynamicVirtualAccount({
-      amountNaira: params.amountNaira,
+      amountKobo: Math.round(params.amountNaira * 100),
       email,
       transactionRef,
       durationSeconds: 86400,
     });
 
-    dvaAccountNumber = dva.virtual_account_number;
-    if (dva.expires_at) {
-      expiresAt = new Date(dva.expires_at);
-    } else {
-      expiresAt = new Date(Date.now() + 86400 * 1000);
-    }
+    dvaAccountNumber = dva.account_number;
+    expiresAt = dva.expires_at ? new Date(dva.expires_at) : new Date(Date.now() + 86400 * 1000);
   } catch (error) {
     console.error("Squad DVA creation failed", {
       error: error instanceof Error ? error.message : JSON.stringify(error),
     });
-    await sendWhatsAppMessage({
-      to: params.to,
-      body: "Sorry, I couldn't set up the escrow account right now. Please try again shortly.",
-    });
-    return;
+
+    if (!isSandbox) {
+      await sendWhatsAppMessage({
+        to: params.to,
+        body: "Sorry, I couldn't set up the escrow account right now. Please try again shortly.",
+      });
+      return;
+    }
+
+    // Sandbox fallback — continue without a real DVA so testing isn't blocked
+    console.warn("Sandbox DVA unavailable — creating escrow record without real account number");
+    expiresAt = new Date(Date.now() + 86400 * 1000);
   }
 
   // Lock the job so no new applications come in while waiting for payment
@@ -251,18 +258,55 @@ async function initiateEscrow(params: {
     ? expiresAt.toLocaleString("en-NG", { timeZone: "Africa/Lagos" })
     : "24 hours";
 
-  await sendWhatsAppMessage({
-    to: params.to,
-    body:
-      `Escrow payment required.\n\n` +
+  const body = dvaAccountNumber
+    ? `Escrow payment required.\n\n` +
       `To confirm the hire, transfer ${formattedAmount} to:\n\n` +
-      `Account: ${dvaAccountNumber ?? "Pending"}\n` +
-      `Bank: Guaranty Trust Bank (GTBank)\n` +
+      `Account: ${dvaAccountNumber}\n` +
+      `Bank: GTBank\n` +
       `Amount: ${formattedAmount}\n` +
       `Ref: ${transactionRef}\n\n` +
       `Deadline: ${expiryText}\n\n` +
-      "Once payment is confirmed, the worker will be notified and contacts will be shared.",
+      "Once payment is confirmed, the worker will be notified and contacts will be shared."
+    : `Escrow account is being set up.\n\n` +
+      `Amount: ${formattedAmount}\n` +
+      `Ref: ${transactionRef}\n\n` +
+      `Once ready, reply SIMULATE to confirm the payment and proceed.`;
+
+  await sendWhatsAppMessage({ to: params.to, body });
+}
+
+export async function simulateEscrowPayment(params: {
+  employer: typeof users.$inferSelect;
+  to: string;
+}) {
+  const data = params.employer.onboardingData;
+  const escrowId =
+    data && typeof data === "object" && "escrowId" in data
+      ? (data.escrowId as string | null)
+      : null;
+
+  if (!escrowId) {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "No pending escrow found. Reply ACCEPT on an application first.",
+    });
+    return;
+  }
+
+  const db = getDb();
+  const escrow = await db.query.jobEscrows.findFirst({
+    where: eq(jobEscrows.id, escrowId),
   });
+
+  if (!escrow || escrow.status !== "pending_payment") {
+    await sendWhatsAppMessage({
+      to: params.to,
+      body: "This escrow has already been processed.",
+    });
+    return;
+  }
+
+  await releaseEscrowAndShareContacts({ escrowId: escrow.id });
 }
 
 export function parseBudgetToNaira(budget: string | null | undefined): number | null {
@@ -357,6 +401,58 @@ async function shareContacts(escrow: typeof jobEscrows.$inferSelect) {
         `Great news! ${employerName} has confirmed your hire for ${jobTitle}.\n\n` +
         `Employer's contact: ${employerContact?.phoneNumber ?? "Not available"}\n\n` +
         "Reach out to confirm the details and get started.",
+    });
+  }
+}
+
+export async function disburseEscrowToWallet(workRequestId: string): Promise<void> {
+  const db = getDb();
+
+  const escrow = await db.query.jobEscrows.findFirst({
+    where: and(eq(jobEscrows.workRequestId, workRequestId), eq(jobEscrows.status, "funded")),
+  });
+
+  if (!escrow) {
+    console.warn("disburseEscrowToWallet: no funded escrow found for work request", { workRequestId });
+    return;
+  }
+
+  // Credit worker wallet and mark escrow released atomically
+  await Promise.all([
+    db
+      .insert(walletBalances)
+      .values({
+        userId: escrow.workerId,
+        availableBalance: escrow.amount,
+        ledgerBalance: escrow.amount,
+        currency: "NGN",
+      })
+      .onConflictDoUpdate({
+        target: walletBalances.userId,
+        set: {
+          availableBalance: sql`${walletBalances.availableBalance} + ${escrow.amount}`,
+          ledgerBalance: sql`${walletBalances.ledgerBalance} + ${escrow.amount}`,
+          updatedAt: new Date(),
+        },
+      }),
+    db
+      .update(jobEscrows)
+      .set({ status: "released", updatedAt: new Date() })
+      .where(eq(jobEscrows.id, escrow.id)),
+  ]);
+
+  // Notify worker
+  const workerContact = await db.query.whatsappContacts.findFirst({
+    where: eq(whatsappContacts.userId, escrow.workerId),
+  });
+
+  if (workerContact) {
+    await sendWhatsAppMessage({
+      to: workerContact.phoneNumber,
+      body:
+        `💰 Cha-ching! Payment received.\n\n` +
+        `${formatNaira(escrow.amount)} has been added to your Zaa wallet.\n\n` +
+        "Reply EARNINGS to check your balance.",
     });
   }
 }

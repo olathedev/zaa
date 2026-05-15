@@ -56,6 +56,9 @@ export const env = {
     employerWelcomeImageUrl: process.env.TWILIO_EMPLOYER_WELCOME_IMAGE_URL,
     workerWelcomeImageUrl: process.env.TWILIO_WORKER_WELCOME_IMAGE_URL,
     jobAlertContentSid: process.env.TWILIO_JOB_ALERT_CONTENT_SID,
+    workerJobDetailSid: process.env.TWILIO_WORKER_JOB_DETAIL_SID,
+    employerJobDetailSid: process.env.TWILIO_EMPLOYER_JOB_DETAIL_SID,
+    employerConfirmDoneSid: process.env.TWILIO_EMPLOYER_CONFIRM_DONE_SID,
   },
   squad: {
     baseUrl: process.env.SQUAD_BASE_URL ?? "https://sandbox-api-d.squadco.com",

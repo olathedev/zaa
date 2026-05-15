@@ -18,7 +18,16 @@ import {
   getEscrowState,
   handleEscrowAccept,
   handleEscrowAmountInput,
+  simulateEscrowPayment,
 } from "./employer-escrow.service.js";
+import {
+  getManagingJobId,
+  handleEmployerActiveJobs,
+  handleEmployerCancelJob,
+  handleEmployerJobSelection,
+  handleEmployerMarkDone,
+  hasActiveJobList,
+} from "./employer-active-jobs.service.js";
 import {
   getDraftWorkRequest,
   handleWorkRequestMessage,
@@ -32,7 +41,28 @@ type HandleEmployerMenuMessageParams = {
 export async function handleEmployerMenuMessage(
   params: HandleEmployerMenuMessageParams,
 ) {
-  const command = normalizeCommand(params.message.body);
+  const command = normalizeCommand(params.message.buttonPayload ?? params.message.body);
+
+  // Job list selection (numbered reply while viewing active jobs list)
+  if (hasActiveJobList(params.user) && /^\d+$/.test(command)) {
+    await handleEmployerJobSelection({ employer: params.user, to: params.message.from, input: command });
+    return;
+  }
+
+  // Job management commands (DONE / CANCEL JOB) when a job is selected
+  if (getManagingJobId(params.user)) {
+    if (["done", "mark done", "confirm", "confirm complete"].includes(command)) {
+      await handleEmployerMarkDone({ employer: params.user, to: params.message.from });
+      return;
+    }
+    if (command === "discontinue") {
+      await sendWhatsAppMessage({
+        to: params.message.from,
+        body: "The discontinue feature is coming soon.",
+      });
+      return;
+    }
+  }
 
   // Escrow amount input takes highest priority
   const escrowState = getEscrowState(params.user);
@@ -74,11 +104,8 @@ export async function handleEmployerMenuMessage(
     return;
   }
 
-  if (["3", "in progress", "progress", "in-progress work"].includes(command)) {
-    await sendWhatsAppMessage({
-      to: params.message.from,
-      body: "You do not have any work in progress yet.",
-    });
+  if (["3", "in progress", "progress", "in-progress work", "active jobs"].includes(command)) {
+    await handleEmployerActiveJobs({ employer: params.user, to: params.message.from });
     return;
   }
 
@@ -126,6 +153,11 @@ export async function handleEmployerMenuMessage(
       employer: params.user,
       to: params.message.from,
     });
+    return;
+  }
+
+  if (command === "simulate") {
+    await simulateEscrowPayment({ employer: params.user, to: params.message.from });
     return;
   }
 

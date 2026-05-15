@@ -262,6 +262,7 @@ export const workRequestStatus = pgEnum("work_request_status", [
   "open",
   "escrow_pending",
   "in_progress",
+  "pending_completion",
   "completed",
   "cancelled",
 ]);
@@ -290,6 +291,8 @@ export const jobApplicationStatus = pgEnum("job_application_status", [
   "pending",
   "accepted",
   "declined",
+  "completed",
+  "cancelled",
 ]);
 
 export const jobApplications = pgTable(
