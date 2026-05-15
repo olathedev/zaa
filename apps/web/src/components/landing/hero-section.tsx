@@ -155,7 +155,7 @@ export function HeroSection({ whatsappChatUrl }: { whatsappChatUrl: string }) {
 
 					<div className="max-w-xl lg:pb-2">
 						<p data-hero-intro className="text-base leading-7 text-[#475569]">
-							Zaa ai connects workers, traders, artisans, and job seekers to the
+							Zaaaa ai connects workers, traders, artisans, and job seekers to the
 							opportunities and financial services they need through
 							conversational AI.
 						</p>
